@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import Any
 
 from openhands.sdk.llm.options.common import apply_defaults_if_absent
-from openhands.sdk.llm.utils.model_features import get_features
 
 
 def select_responses_options(
