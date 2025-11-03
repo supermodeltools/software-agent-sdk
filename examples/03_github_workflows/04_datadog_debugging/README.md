@@ -20,11 +20,13 @@ The workflow:
 
 ### Manual Trigger
 Run on-demand via GitHub Actions UI with configurable inputs:
-- Datadog query (e.g., `service:deploy ClientDisconnect`)
+- **Query Type**: Choose between `log-query` (search) or `log-error-id` (specific error ID)
+- **Datadog Query**:
+  - For `log-query`: Search query like `service:deploy ClientDisconnect`
+  - For `log-error-id`: Specific error tracking ID like `2adba034-ab5a-11f0-b04e-da7ad0900000`
 - Repository list to analyze
 - Issue repository for tracking
 - Parent issue for organization
-- Max errors to fetch
 - LLM model selection
 
 ### Smart Issue Management
@@ -62,9 +64,9 @@ LLM_BASE_URL: Base URL for LLM service (optional)
 
 ### Installation
 
-1. Copy `workflow.yml` to your repository's `.github/workflows/` directory
-2. Configure the required secrets
-3. Ensure `examples/01_standalone_sdk/26_datadog_debugging.py` is accessible in your repository
+1. Copy the entire `04_datadog_debugging/` directory to your repository's `examples/03_github_workflows/` directory
+2. Copy `workflow.yml` to your repository's `.github/workflows/` directory
+3. Configure the required secrets
 
 ## Usage
 
@@ -74,34 +76,55 @@ LLM_BASE_URL: Base URL for LLM service (optional)
 2. Select **Datadog Error Debugging** workflow
 3. Click **Run workflow**
 4. Configure inputs:
-   - **Datadog Query**: Error search query (default: `service:deploy ClientDisconnect`)
+   - **Query Type**: Choose `log-query` or `log-error-id` (default: `log-query`)
+   - **Datadog Query**: 
+     - For `log-query`: Search query (default: `service:deploy ClientDisconnect`)
+     - For `log-error-id`: Error tracking ID (e.g., `2adba034-ab5a-11f0-b04e-da7ad0900000`)
    - **Repository List**: Comma-separated repos to analyze (default: `OpenHands/OpenHands,All-Hands-AI/infra`)
    - **Issue Repository**: Where to create issues (default: `All-Hands-AI/infra`)
    - **Parent Issue**: Optional parent issue URL for tracking
    - **Issue Prefix**: Prefix for issue titles (default: `DataDog Error: `)
-   - **Max Errors**: Maximum errors to fetch (default: `5`)
    - **LLM Model**: Model to use (default: `openhands/claude-sonnet-4-5-20250929`)
 5. Click **Run workflow**
 
 ### Via GitHub CLI
 
+**Search for errors matching a query:**
 ```bash
 gh workflow run datadog-debugging.yml \
+  -f query_type="log-query" \
   -f datadog_query="service:deploy ClientDisconnect" \
   -f repo_list="OpenHands/OpenHands,All-Hands-AI/infra" \
-  -f issue_repo="All-Hands-AI/infra" \
-  -f max_errors="5"
+  -f issue_repo="All-Hands-AI/infra"
+```
+
+**Debug a specific error by ID:**
+```bash
+gh workflow run datadog-debugging.yml \
+  -f query_type="log-error-id" \
+  -f datadog_query="2adba034-ab5a-11f0-b04e-da7ad0900000" \
+  -f repo_list="OpenHands/OpenHands,All-Hands-AI/infra,All-Hands-AI/deploy" \
+  -f issue_repo="All-Hands-AI/infra"
 ```
 
 ## Example
 
-### Input
+### Input (Search Query)
 ```yaml
+query_type: "log-query"
 datadog_query: "service:deploy ClientDisconnect"
 repo_list: "OpenHands/OpenHands,All-Hands-AI/infra,All-Hands-AI/deploy"
 issue_repo: "All-Hands-AI/infra"
 issue_parent: "https://github.com/All-Hands-AI/infra/issues/672"
-max_errors: 5
+```
+
+### Input (Specific Error ID)
+```yaml
+query_type: "log-error-id"
+datadog_query: "2adba034-ab5a-11f0-b04e-da7ad0900000"
+repo_list: "OpenHands/OpenHands,All-Hands-AI/infra,All-Hands-AI/deploy"
+issue_repo: "All-Hands-AI/infra"
+issue_parent: "https://github.com/All-Hands-AI/infra/issues/672"
 ```
 
 ### Output

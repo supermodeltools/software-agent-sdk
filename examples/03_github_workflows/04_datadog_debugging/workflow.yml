@@ -4,8 +4,18 @@ name: Datadog Error Debugging
 on:
     workflow_dispatch:
         inputs:
+            query_type:
+                description: 'Query type: log-query (search) or log-error-id (specific ID)'
+                required: true
+                type: choice
+                options:
+                    - log-query
+                    - log-error-id
+                default: log-query
             datadog_query:
-                description: Datadog query to search for errors
+                description: >-
+                    Datadog query (search query for log-query mode,
+                    or error tracking ID for log-error-id mode)
                 required: true
                 default: service:deploy ClientDisconnect
             repo_list:
@@ -24,10 +34,6 @@ on:
                 description: Prefix for issue titles
                 required: false
                 default: 'DataDog Error: '
-            max_errors:
-                description: Maximum number of errors to fetch
-                required: false
-                default: '5'
             llm_model:
                 description: LLM model to use for analysis
                 required: false
@@ -64,14 +70,14 @@ jobs:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
               run: |
                   mkdir -p /tmp/datadog-debug
-                  uv run python examples/01_standalone_sdk/26_datadog_debugging.py \
+                  uv run python examples/03_github_workflows/04_datadog_debugging/datadog_debugging.py \
+                    --query-type "${{ inputs.query_type }}" \
                     --query "${{ inputs.datadog_query }}" \
                     --repos "${{ inputs.repo_list }}" \
                     --working-dir "/tmp/datadog-debug" \
                     --issue-repo "${{ inputs.issue_repo }}" \
                     --issue-parent "${{ inputs.issue_parent }}" \
-                    --issue-prefix "${{ inputs.issue_prefix }}" \
-                    --max-errors "${{ inputs.max_errors }}"
+                    --issue-prefix "${{ inputs.issue_prefix }}"
 
             - name: Upload debugging artifacts
               if: always()
