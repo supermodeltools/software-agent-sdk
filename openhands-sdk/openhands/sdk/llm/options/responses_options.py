@@ -16,8 +16,11 @@ def select_responses_options(
     # Check if user explicitly tried to set temperature for Responses API
     if "temperature" in user_kwargs:
         raise ValueError(
-            "The 'temperature' parameter is not supported for Responses API. "
-            "Responses API models use a fixed temperature internally."
+            "The 'temperature' parameter is not supported by the SDK for "
+            "Responses API. While temperature is officially supported by "
+            "OpenAI's Responses API, the SDK only routes reasoning models "
+            "(GPT-5, Codex, o1, o3) to this API, and these models do not "
+            "support temperature settings."
         )
 
     # Apply defaults for keys that are not forced by policy

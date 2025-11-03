@@ -125,6 +125,25 @@ def test_normalize_responses_kwargs_non_reasoning_model():
     assert out["max_output_tokens"] == 256
 
 
+def test_responses_kwargs_default_no_temperature():
+    """Test that by default, temperature is not included in kwargs for Responses API."""
+    llm = LLM(model="gpt-5-mini-2025-08-07")
+    llm.max_output_tokens = 512
+
+    # Call with empty user_kwargs - should not include temperature
+    out = select_responses_options(llm, {}, include=None, store=None)
+
+    # Verify temperature is NOT in the output
+    assert "temperature" not in out, (
+        "Temperature should not be set by default for Responses API"
+    )
+
+    # Verify other expected defaults are present
+    assert out["tool_choice"] == "auto"
+    assert out["max_output_tokens"] == 512
+    assert "reasoning" in out
+
+
 @patch("openhands.sdk.llm.llm.litellm_responses")
 def test_llm_responses_end_to_end(mock_responses_call):
     # Configure LLM
