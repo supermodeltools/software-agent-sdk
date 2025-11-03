@@ -4,6 +4,7 @@ from typing import Any
 from unittest.mock import MagicMock, Mock
 
 import mcp.types
+import pytest
 
 from openhands.sdk.llm import TextContent
 from openhands.sdk.mcp.client import MCPClient
@@ -212,9 +213,11 @@ class TestMCPToolExecutor:
 class TestMCPTool:
     """Test MCPTool functionality."""
 
-    def setup_method(self):
+    @pytest.fixture(autouse=True)
+    def setup(self, mock_conversation_state):
         """Set up test fixtures."""
         self.mock_client: MockMCPClient = MockMCPClient()
+        self.mock_conversation_state = mock_conversation_state
 
         # Create mock MCP tool
         self.mock_mcp_tool: Mock = MagicMock(spec=mcp.types.Tool)
@@ -228,7 +231,9 @@ class TestMCPTool:
         self.mock_mcp_tool.meta = None
 
         tools = MCPToolDefinition.create(
-            mcp_tool=self.mock_mcp_tool, mcp_client=self.mock_client
+            self.mock_conversation_state,
+            mcp_tool=self.mock_mcp_tool,
+            mcp_client=self.mock_client,
         )
         self.tool: MCPToolDefinition = tools[0]  # Extract single tool from sequence
 
@@ -264,7 +269,9 @@ class TestMCPTool:
         mock_tool_with_annotations.meta = {"version": "1.0"}
 
         tools = MCPToolDefinition.create(
-            mcp_tool=mock_tool_with_annotations, mcp_client=self.mock_client
+            self.mock_conversation_state,
+            mcp_tool=mock_tool_with_annotations,
+            mcp_client=self.mock_client,
         )
         tool = tools[0]  # Extract single tool from sequence
 
@@ -283,7 +290,9 @@ class TestMCPTool:
         mock_tool_no_desc.meta = None
 
         tools = MCPToolDefinition.create(
-            mcp_tool=mock_tool_no_desc, mcp_client=self.mock_client
+            self.mock_conversation_state,
+            mcp_tool=mock_tool_no_desc,
+            mcp_client=self.mock_client,
         )
         tool = tools[0]  # Extract single tool from sequence
 

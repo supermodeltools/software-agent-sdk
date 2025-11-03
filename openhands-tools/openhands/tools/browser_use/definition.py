@@ -17,7 +17,7 @@ from openhands.sdk.utils import maybe_truncate
 
 # Lazy import to avoid hanging during module import
 if TYPE_CHECKING:
-    from openhands.tools.browser_use.impl import BrowserToolExecutor
+    from openhands.sdk.conversation.state import ConversationState
 
 
 # Maximum output size for browser observations
@@ -102,7 +102,14 @@ class BrowserNavigateTool(ToolDefinition[BrowserNavigateAction, BrowserObservati
     """Tool for browser navigation."""
 
     @classmethod
-    def create(cls, executor: "BrowserToolExecutor") -> Sequence[Self]:
+    def create(
+        cls,
+        conv_state: "ConversationState",  # noqa: ARG003
+        **kwargs,
+    ) -> Sequence[Self]:
+        from openhands.tools.browser_use.impl import BrowserToolExecutor
+
+        executor = kwargs.get("executor") or BrowserToolExecutor(**kwargs)
         return [
             cls(
                 name="browser_navigate",
@@ -153,7 +160,14 @@ class BrowserClickTool(ToolDefinition[BrowserClickAction, BrowserObservation]):
     """Tool for clicking browser elements."""
 
     @classmethod
-    def create(cls, executor: "BrowserToolExecutor") -> Sequence[Self]:
+    def create(
+        cls,
+        conv_state: "ConversationState",  # noqa: ARG003
+        **kwargs,
+    ) -> Sequence[Self]:
+        from openhands.tools.browser_use.impl import BrowserToolExecutor
+
+        executor = kwargs.get("executor") or BrowserToolExecutor(**kwargs)
         return [
             cls(
                 name="browser_click",
@@ -201,7 +215,14 @@ class BrowserTypeTool(ToolDefinition[BrowserTypeAction, BrowserObservation]):
     """Tool for typing text into browser elements."""
 
     @classmethod
-    def create(cls, executor: "BrowserToolExecutor") -> Sequence[Self]:
+    def create(
+        cls,
+        conv_state: "ConversationState",  # noqa: ARG003
+        **kwargs,
+    ) -> Sequence[Self]:
+        from openhands.tools.browser_use.impl import BrowserToolExecutor
+
+        executor = kwargs.get("executor") or BrowserToolExecutor(**kwargs)
         return [
             cls(
                 name="browser_type",
@@ -246,7 +267,14 @@ class BrowserGetStateTool(ToolDefinition[BrowserGetStateAction, BrowserObservati
     """Tool for getting browser state."""
 
     @classmethod
-    def create(cls, executor: "BrowserToolExecutor") -> Sequence[Self]:
+    def create(
+        cls,
+        conv_state: "ConversationState",  # noqa: ARG003
+        **kwargs,
+    ) -> Sequence[Self]:
+        from openhands.tools.browser_use.impl import BrowserToolExecutor
+
+        executor = kwargs.get("executor") or BrowserToolExecutor(**kwargs)
         return [
             cls(
                 name="browser_get_state",
@@ -294,7 +322,14 @@ class BrowserGetContentTool(
     """Tool for getting page content in markdown."""
 
     @classmethod
-    def create(cls, executor: "BrowserToolExecutor") -> Sequence[Self]:
+    def create(
+        cls,
+        conv_state: "ConversationState",  # noqa: ARG003
+        **kwargs,
+    ) -> Sequence[Self]:
+        from openhands.tools.browser_use.impl import BrowserToolExecutor
+
+        executor = kwargs.get("executor") or BrowserToolExecutor(**kwargs)
         return [
             cls(
                 name="browser_get_content",
@@ -339,7 +374,14 @@ class BrowserScrollTool(ToolDefinition[BrowserScrollAction, BrowserObservation])
     """Tool for scrolling the browser page."""
 
     @classmethod
-    def create(cls, executor: "BrowserToolExecutor") -> Sequence[Self]:
+    def create(
+        cls,
+        conv_state: "ConversationState",  # noqa: ARG003
+        **kwargs,
+    ) -> Sequence[Self]:
+        from openhands.tools.browser_use.impl import BrowserToolExecutor
+
+        executor = kwargs.get("executor") or BrowserToolExecutor(**kwargs)
         return [
             cls(
                 name="browser_scroll",
@@ -378,7 +420,14 @@ class BrowserGoBackTool(ToolDefinition[BrowserGoBackAction, BrowserObservation])
     """Tool for going back in browser history."""
 
     @classmethod
-    def create(cls, executor: "BrowserToolExecutor") -> Sequence[Self]:
+    def create(
+        cls,
+        conv_state: "ConversationState",  # noqa: ARG003
+        **kwargs,
+    ) -> Sequence[Self]:
+        from openhands.tools.browser_use.impl import BrowserToolExecutor
+
+        executor = kwargs.get("executor") or BrowserToolExecutor(**kwargs)
         return [
             cls(
                 name="browser_go_back",
@@ -417,7 +466,14 @@ class BrowserListTabsTool(ToolDefinition[BrowserListTabsAction, BrowserObservati
     """Tool for listing browser tabs."""
 
     @classmethod
-    def create(cls, executor: "BrowserToolExecutor") -> Sequence[Self]:
+    def create(
+        cls,
+        conv_state: "ConversationState",  # noqa: ARG003
+        **kwargs,
+    ) -> Sequence[Self]:
+        from openhands.tools.browser_use.impl import BrowserToolExecutor
+
+        executor = kwargs.get("executor") or BrowserToolExecutor(**kwargs)
         return [
             cls(
                 name="browser_list_tabs",
@@ -461,7 +517,14 @@ class BrowserSwitchTabTool(ToolDefinition[BrowserSwitchTabAction, BrowserObserva
     """Tool for switching browser tabs."""
 
     @classmethod
-    def create(cls, executor: "BrowserToolExecutor") -> Sequence[Self]:
+    def create(
+        cls,
+        conv_state: "ConversationState",  # noqa: ARG003
+        **kwargs,
+    ) -> Sequence[Self]:
+        from openhands.tools.browser_use.impl import BrowserToolExecutor
+
+        executor = kwargs.get("executor") or BrowserToolExecutor(**kwargs)
         return [
             cls(
                 name="browser_switch_tab",
@@ -504,7 +567,14 @@ class BrowserCloseTabTool(ToolDefinition[BrowserCloseTabAction, BrowserObservati
     """Tool for closing browser tabs."""
 
     @classmethod
-    def create(cls, executor: "BrowserToolExecutor") -> Sequence[Self]:
+    def create(
+        cls,
+        conv_state: "ConversationState",  # noqa: ARG003
+        **kwargs,
+    ) -> Sequence[Self]:
+        from openhands.tools.browser_use.impl import BrowserToolExecutor
+
+        executor = kwargs.get("executor") or BrowserToolExecutor(**kwargs)
         return [
             cls(
                 name="browser_close_tab",
@@ -536,13 +606,16 @@ class BrowserToolSet(ToolDefinition[BrowserAction, BrowserObservation]):
     @classmethod
     def create(
         cls,
+        conv_state: "ConversationState",
         **executor_config,
     ) -> list[ToolDefinition[BrowserAction, BrowserObservation]]:
         # Import executor only when actually needed to
         # avoid hanging during module import
         from openhands.tools.browser_use.impl import BrowserToolExecutor
 
+        # Create a single shared executor for all tools
         executor = BrowserToolExecutor(**executor_config)
+
         # Each tool.create() returns a Sequence[Self], so we flatten the results
         tools: list[ToolDefinition[BrowserAction, BrowserObservation]] = []
         for tool_class in [
@@ -557,5 +630,5 @@ class BrowserToolSet(ToolDefinition[BrowserAction, BrowserObservation]):
             BrowserSwitchTabTool,
             BrowserCloseTabTool,
         ]:
-            tools.extend(tool_class.create(executor))
+            tools.extend(tool_class.create(conv_state, executor=executor))
         return tools

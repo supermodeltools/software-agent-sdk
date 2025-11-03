@@ -34,7 +34,7 @@ from openhands.sdk.utils.models import (
 
 
 if TYPE_CHECKING:
-    from openhands.sdk.conversation import LocalConversation
+    from openhands.sdk.conversation import ConversationState, LocalConversation
 
 
 ActionT = TypeVar("ActionT", bound=Action)
@@ -179,7 +179,7 @@ class ToolDefinition[ActionT, ObservationT](DiscriminatedUnionMixin, ABC):
 
     @classmethod
     @abstractmethod
-    def create(cls, *args, **kwargs) -> Sequence[Self]:
+    def create(cls, conv_state: "ConversationState", **kwargs) -> Sequence[Self]:
         """Create a sequence of Tool instances.
 
         This method must be implemented by all subclasses to provide custom
@@ -187,7 +187,7 @@ class ToolDefinition[ActionT, ObservationT](DiscriminatedUnionMixin, ABC):
         from conv_state and other optional parameters.
 
         Args:
-            *args: Variable positional arguments (typically conv_state as first arg).
+            conv_state: Conversation state containing workspace and other context.
             **kwargs: Optional parameters for tool initialization.
 
         Returns:
