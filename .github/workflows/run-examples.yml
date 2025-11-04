@@ -89,6 +89,21 @@ jobs:
                       API_URL="https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/issues/${PR_NUMBER}/comments"
                   fi
 
+                  # Function to sanitize @OpenHands mentions to prevent self-mention loops
+                  sanitize_comment() {
+                      local text="$1"
+                      # Use Python to sanitize mentions (inserts zero-width joiner after @)
+                      echo "$text" | python3 -c "
+import sys
+import re
+ZWJ = '\u200D'
+text = sys.stdin.read()
+pattern = r'@(?=\b[Oo]pen[Hh]ands\b)'
+sanitized = re.sub(pattern, f'@{ZWJ}', text, flags=re.IGNORECASE)
+print(sanitized, end='')
+"
+                  }
+
                   # Function to update PR comment
                   update_comment() {
                       # Skip if not a PR event
@@ -98,6 +113,9 @@ jobs:
                       
                       local comment_body="$1"
                       local response
+                      
+                      # Sanitize @OpenHands mentions before posting
+                      comment_body=$(sanitize_comment "$comment_body")
                       
                       if [ -z "$COMMENT_ID" ]; then
                           # Create new comment
