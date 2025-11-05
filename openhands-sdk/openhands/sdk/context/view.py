@@ -14,6 +14,7 @@ from openhands.sdk.event.base import Event, EventID
 from openhands.sdk.event.llm_convertible import (
     ActionEvent,
     ObservationBaseEvent,
+    SecurityPromptEvent,
 )
 from openhands.sdk.event.types import ToolCallID
 
@@ -200,11 +201,19 @@ class View(BaseModel):
         # blocks separated from their tool calls
         forgotten_event_ids = View._enforce_batch_atomicity(events, forgotten_event_ids)
 
+        # Check if security analyzer is enabled by looking for SecurityPromptEvent
+        security_analyzer_enabled = any(
+            isinstance(event, SecurityPromptEvent) for event in events
+        )
+
         kept_events = [
             event
             for event in events
             if event.id not in forgotten_event_ids
             and isinstance(event, LLMConvertibleEvent)
+            and (
+                not isinstance(event, SecurityPromptEvent) or security_analyzer_enabled
+            )
         ]
 
         # If we have a summary, insert it at the specified offset.

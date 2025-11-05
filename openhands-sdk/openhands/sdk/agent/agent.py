@@ -4,6 +4,7 @@ from pydantic import ValidationError
 
 import openhands.sdk.security.risk as risk
 from openhands.sdk.agent.base import AgentBase
+from openhands.sdk.context.prompts.prompt import render_template
 from openhands.sdk.context.view import View
 from openhands.sdk.conversation import (
     ConversationCallbackType,
@@ -17,6 +18,7 @@ from openhands.sdk.event import (
     LLMConvertibleEvent,
     MessageEvent,
     ObservationEvent,
+    SecurityPromptEvent,
     SystemPromptEvent,
 )
 from openhands.sdk.event.condenser import Condensation, CondensationRequest
@@ -111,6 +113,18 @@ class Agent(AgentBase):
                 ],
             )
             on_event(event)
+
+            # Add security prompt if security analyzer is enabled
+            if self._add_security_risk_prediction:
+                security_prompt_text = render_template(
+                    prompt_dir=self.prompt_dir,
+                    template_name="security_analyzer_info.j2",
+                )
+                security_event = SecurityPromptEvent(
+                    source="agent",
+                    security_prompt=TextContent(text=security_prompt_text),
+                )
+                on_event(security_event)
 
     def _execute_actions(
         self,
