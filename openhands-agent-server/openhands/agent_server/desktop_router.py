@@ -3,7 +3,8 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from openhands.agent_server.desktop_service import DesktopService, get_desktop_service
+from openhands.agent_server.dependencies import get_desktop_service
+from openhands.agent_server.desktop_service import DesktopService
 from openhands.sdk.logger import get_logger
 
 
@@ -36,7 +37,11 @@ async def get_desktop_url(
     """
     if desktop_service is None or not hasattr(desktop_service, "get_vnc_url"):
         # Fallback for direct function invocation in tests
-        desktop_service = get_desktop_service()
+        from openhands.agent_server.desktop_service import (
+            get_desktop_service as _legacy_get,
+        )
+
+        desktop_service = _legacy_get()
         if desktop_service is None:
             raise HTTPException(
                 status_code=503,
