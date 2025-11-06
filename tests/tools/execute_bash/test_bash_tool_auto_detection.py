@@ -22,7 +22,7 @@ from openhands.tools.execute_bash.terminal import (
 
 def _create_conv_state(working_dir: str) -> ConversationState:
     """Helper to create a ConversationState for testing."""
-    llm = LLM(model="gpt-4o-mini", api_key=SecretStr("test-key"), service_id="test-llm")
+    llm = LLM(model="gpt-4o-mini", api_key=SecretStr("test-key"), usage_id="test-llm")
     agent = Agent(llm=llm, tools=[])
     return ConversationState.create(
         id=uuid.uuid4(),
@@ -52,7 +52,7 @@ def test_default_auto_detection():
         # Test that it works
         action = ExecuteBashAction(command="echo 'Auto-detection test'")
         obs = executor(action)
-        assert "Auto-detection test" in obs.output
+        assert "Auto-detection test" in obs.text
 
 
 def test_forced_terminal_types():
@@ -138,7 +138,7 @@ def test_backward_compatibility():
         assert tool.executor is not None
         action = ExecuteBashAction(command="echo 'Backward compatibility test'")
         obs = tool.executor(action)
-        assert "Backward compatibility test" in obs.output
+        assert "Backward compatibility test" in obs.text
         assert obs.metadata.exit_code == 0
 
 
@@ -148,7 +148,7 @@ def test_tool_metadata():
         tools = BashTool.create(_create_conv_state(temp_dir))
         tool = tools[0]
 
-        assert tool.name == "execute_bash"
+        assert tool.name == "bash"
         assert tool.description is not None
         assert tool.action_type == ExecuteBashAction
         assert hasattr(tool, "annotations")

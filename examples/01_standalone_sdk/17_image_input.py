@@ -19,7 +19,6 @@ from openhands.sdk import (
     TextContent,
     get_logger,
 )
-from openhands.sdk.tool.registry import register_tool
 from openhands.sdk.tool.spec import Tool
 from openhands.tools.execute_bash import BashTool
 from openhands.tools.file_editor import FileEditorTool
@@ -34,26 +33,23 @@ assert api_key is not None, "LLM_API_KEY environment variable is not set."
 model = os.getenv("LLM_MODEL", "openhands/claude-sonnet-4-5-20250929")
 base_url = os.getenv("LLM_BASE_URL")
 llm = LLM(
-    service_id="vision-llm",
+    usage_id="vision-llm",
     model=model,
     base_url=base_url,
     api_key=SecretStr(api_key),
 )
+assert llm.vision_is_active(), "The selected LLM model does not support vision input."
 
 cwd = os.getcwd()
-
-register_tool("BashTool", BashTool)
-register_tool("FileEditorTool", FileEditorTool)
-register_tool("TaskTrackerTool", TaskTrackerTool)
 
 agent = Agent(
     llm=llm,
     tools=[
         Tool(
-            name="BashTool",
+            name=BashTool.name,
         ),
-        Tool(name="FileEditorTool"),
-        Tool(name="TaskTrackerTool"),
+        Tool(name=FileEditorTool.name),
+        Tool(name=TaskTrackerTool.name),
     ],
 )
 
@@ -69,14 +65,11 @@ conversation = Conversation(
     agent=agent, callbacks=[conversation_callback], workspace=cwd
 )
 
-IMAGE_URL = (
-    "https://github.com/All-Hands-AI/OpenHands/raw/main/docs/static/img/logo.png"
-)
+IMAGE_URL = "https://github.com/OpenHands/docs/raw/main/openhands/static/img/logo.png"
 
 conversation.send_message(
     Message(
         role="user",
-        vision_enabled=True,
         content=[
             TextContent(
                 text=(
@@ -95,8 +88,11 @@ conversation.send_message(
 )
 conversation.run()
 
-
 print("=" * 100)
 print("Conversation finished. Got the following LLM messages:")
 for i, message in enumerate(llm_messages):
     print(f"Message {i}: {str(message)[:200]}")
+
+# Report cost
+cost = llm.metrics.accumulated_cost
+print(f"EXAMPLE_COST: {cost}")

@@ -18,7 +18,7 @@ from openhands.sdk import (
     get_logger,
 )
 from openhands.sdk.conversation.types import ConversationCallbackType
-from openhands.sdk.tool import Tool, register_tool
+from openhands.sdk.tool import Tool
 from openhands.sdk.utils.async_utils import AsyncCallbackWrapper
 from openhands.tools.execute_bash import BashTool
 from openhands.tools.file_editor import FileEditorTool
@@ -33,7 +33,7 @@ assert api_key is not None, "LLM_API_KEY environment variable is not set."
 model = os.getenv("LLM_MODEL", "openhands/claude-sonnet-4-5-20250929")
 base_url = os.getenv("LLM_BASE_URL")
 llm = LLM(
-    service_id="agent",
+    usage_id="agent",
     model=model,
     base_url=base_url,
     api_key=SecretStr(api_key),
@@ -41,15 +41,12 @@ llm = LLM(
 
 # Tools
 cwd = os.getcwd()
-register_tool("BashTool", BashTool)
-register_tool("FileEditorTool", FileEditorTool)
-register_tool("TaskTrackerTool", TaskTrackerTool)
 tools = [
     Tool(
-        name="BashTool",
+        name=BashTool.name,
     ),
-    Tool(name="FileEditorTool"),
-    Tool(name="TaskTrackerTool"),
+    Tool(name=FileEditorTool.name),
+    Tool(name=TaskTrackerTool.name),
 ]
 
 # Agent
@@ -91,6 +88,10 @@ async def main():
     print("Conversation finished. Got the following LLM messages:")
     for i, message in enumerate(llm_messages):
         print(f"Message {i}: {str(message)[:200]}")
+
+    # Report cost
+    cost = llm.metrics.accumulated_cost
+    print(f"EXAMPLE_COST: {cost}")
 
 
 if __name__ == "__main__":
