@@ -14,6 +14,9 @@ from openhands.sdk.logger import get_logger
 
 
 logger = get_logger(__name__)
+# Back-compat: expose module-level get_desktop_service symbol for tests
+get_desktop_service = _legacy_get_desktop_service
+
 
 desktop_router = APIRouter(prefix="/desktop", tags=["Desktop"])
 
