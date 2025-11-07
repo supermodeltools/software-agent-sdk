@@ -61,6 +61,7 @@ from litellm.utils import (
 
 from openhands.sdk.llm.exceptions import (
     LLMNoResponseError,
+    LLMServiceUnavailableError,
     map_provider_exception,
 )
 
@@ -92,6 +93,7 @@ LLM_RETRY_EXCEPTIONS: tuple[type[Exception], ...] = (
     LiteLLMTimeout,
     InternalServerError,
     LLMNoResponseError,
+    LLMServiceUnavailableError,
 )
 
 SERVICE_ID_DEPRECATION_MSG = (
