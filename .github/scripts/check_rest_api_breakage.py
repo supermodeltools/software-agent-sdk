@@ -98,19 +98,27 @@ def generate_openapi_from_installed(version: str, out_path: Path) -> None:
 
 
 def run_oasdiff(old_path: Path, new_path: Path) -> int:
-    # Use oasdiff docker image
-    cmd = [
+    # Use oasdiff docker image with config file if present
+    workdir = old_path.parent
+    config_path = workdir / "oasdiff.yaml"
+    docker_args = [
         "docker",
         "run",
         "--rm",
         "-v",
-        f"{old_path.parent.as_posix()}:/work",
+        f"{workdir.as_posix()}:/work",
         "ghcr.io/tufin/oasdiff:latest",
         "breaking",
         f"/work/{old_path.name}",
         f"/work/{new_path.name}",
     ]
-    proc = subprocess.run(cmd)
+    if config_path.exists():
+        # oasdiff discovers config file in CWD named oasdiff.*; set working directory
+        docker_args.insert(6, "-w")
+        docker_args.insert(7, "/work")
+    # Ensure we fail CI on ERR-level by default (also in config)
+    docker_args += ["--fail-on", "ERR", "-f", "githubactions"]
+    proc = subprocess.run(docker_args)
     return proc.returncode
 
 

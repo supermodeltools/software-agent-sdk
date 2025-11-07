@@ -11,40 +11,46 @@ jobs:
         runs-on: ubuntu-latest
         steps:
             - name: Checkout
-              uses: actions/checkout@v4
+              uses: actions/checkout@v5
               with:
                   fetch-depth: 0
-            - name: Setup Python
-              uses: actions/setup-python@v5
+            - name: Install uv
+              uses: astral-sh/setup-uv@v7
               with:
-                  python-version: '3.12'
-            - name: Install uv and deps
+                  enable-cache: true
+            - name: Install workspace deps (dev)
+              run: uv sync --frozen --group dev
+            - name: Ensure griffe is available
               run: |
-                  pipx install uv
-                  uv pip install --system griffe[pypi]
+                  uv run python - << 'PY'
+                  try:
+                      import griffe  # noqa: F401
+                  except Exception:
+                      import subprocess
+                      subprocess.check_call(["uv", "pip", "install", "griffe[pypi]"])
+                  PY
             - name: Run SDK API breakage check
               env:
                   SDK_INCLUDE_PATHS: openhands.sdk
               run: |
-                  python .github/scripts/check_sdk_api_breakage.py
+                  uv run python .github/scripts/check_sdk_api_breakage.py
 
     rest-api:
         name: REST API (OpenAPI diff)
         runs-on: ubuntu-latest
         steps:
             - name: Checkout
-              uses: actions/checkout@v4
+              uses: actions/checkout@v5
               with:
                   fetch-depth: 0
-            - name: Setup Python
-              uses: actions/setup-python@v5
-              with:
-                  python-version: '3.12'
             - name: Install uv
-              run: |
-                  pipx install uv
+              uses: astral-sh/setup-uv@v7
+              with:
+                  enable-cache: true
+            - name: Install workspace deps (dev)
+              run: uv sync --frozen --group dev
             - name: Ensure Docker available
               run: docker --version
             - name: Run REST API breakage check
               run: |
-                  python .github/scripts/check_rest_api_breakage.py
+                  uv run python .github/scripts/check_rest_api_breakage.py

@@ -1,0 +1,8 @@
+---
+# oasdiff configuration to run from repo root
+format: githubactions
+fail-on: ERR
+# Accept WARN by default; raise fail-on to WARN if you want warnings to fail CI
+# You can ignore specific breaking checks in separate files:
+# err-ignore: .github/oasdiff-err-ignore.txt
+# warn-ignore: .github/oasdiff-warn-ignore.txt
