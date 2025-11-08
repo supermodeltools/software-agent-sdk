@@ -181,15 +181,17 @@ def main() -> int:
     old_major, old_minor, _ = parse_version(prev)
     new_major, new_minor, _ = parse_version(new_version)
 
-    ok = new_major > old_major  # Require major bump for REST
+    # Require MINOR bump on REST breaking changes (same major, higher minor)
+    ok = (new_major == old_major) and (new_minor > old_minor)
     if not ok:
         print(
             f"::error title=REST SemVer::Breaking REST changes detected; require "
-            f"major bump from {old_major}.{old_minor}.x, but new is {new_version}"
+            f"minor version bump from {old_major}.{old_minor}.x, but new is "
+            f"{new_version}"
         )
         return 1
 
-    print("REST breaking changes detected and major bump policy satisfied")
+    print("REST breaking changes detected and minor bump policy satisfied")
     return 0
 
 
