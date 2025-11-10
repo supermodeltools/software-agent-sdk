@@ -106,19 +106,10 @@ jobs:
                       API_URL="https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/issues/${PR_NUMBER}/comments"
                   fi
 
-                  # Function to sanitize @OpenHands mentions to prevent self-mention loops
+                  # Function to sanitize @OpenHands mentions using the SDK utility
                   sanitize_comment() {
                       local text="$1"
-                      # Use Python to sanitize mentions (inserts zero-width joiner after @)
-                      echo "$text" | python3 -c "
-import sys
-import re
-ZWJ = '\u200D'
-text = sys.stdin.read()
-pattern = r'@(?=\b[Oo]pen[Hh]ands\b)'
-sanitized = re.sub(pattern, f'@{ZWJ}', text, flags=re.IGNORECASE)
-print(sanitized, end='')
-"
+                      echo "$text" | uv run python -c "from openhands.sdk.utils.github import sanitize_openhands_mentions; import sys; print(sanitize_openhands_mentions(sys.stdin.read()), end='')"
                   }
 
                   # Function to update PR comment
@@ -321,7 +312,8 @@ print(sanitized, end='')
               shell: bash
               run: |
                   if [ -f examples_report.md ]; then
-                      REPORT_CONTENT=$(cat examples_report.md)
+                      # Sanitize @OpenHands mentions before posting
+                      REPORT_CONTENT=$(uv run python -c "from openhands.sdk.utils.github import sanitize_openhands_mentions; import sys; print(sanitize_openhands_mentions(sys.stdin.read()), end='')" < examples_report.md)
                       echo "report<<EOF" >> $GITHUB_OUTPUT
                       echo "$REPORT_CONTENT" >> $GITHUB_OUTPUT
                       echo "EOF" >> $GITHUB_OUTPUT
