@@ -463,9 +463,29 @@ class Message(BaseModel):
                         "content": content_items,
                     }
                 )
-            # Do not echo back prior turn's reasoning item. The Responses API
-            # does not require sending these back, and including them can cause
-            # validation constraints (ordering requirements).
+            # Include prior turn's reasoning item exactly as received (if any).
+            # Ensure it's not the last item in the input; it must be followed by
+            # at least one other item (e.g., message or function_call).
+            if self.responses_reasoning_item is not None:
+                ri = self.responses_reasoning_item
+                if ri.id is not None:
+                    reasoning_item: dict[str, Any] = {
+                        "type": "reasoning",
+                        "id": ri.id,
+                        "summary": [
+                            {"type": "summary_text", "text": s}
+                            for s in (ri.summary or [])
+                        ],
+                    }
+                    if ri.content:
+                        reasoning_item["content"] = [
+                            {"type": "reasoning_text", "text": t} for t in ri.content
+                        ]
+                    if ri.encrypted_content:
+                        reasoning_item["encrypted_content"] = ri.encrypted_content
+                    if ri.status:
+                        reasoning_item["status"] = ri.status
+                    items.append(reasoning_item)
             # Emit assistant function_call items; the client will also send
             # the corresponding function_call_output items in the same request.
             if self.tool_calls:
