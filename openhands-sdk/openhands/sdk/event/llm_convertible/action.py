@@ -89,13 +89,16 @@ class ActionEvent(LLMConvertibleEvent):
         # Responses API reasoning (plaintext only; never render encrypted_content)
         reasoning_item = self.responses_reasoning_item
         if reasoning_item is not None:
-            content.append("Reasoning:\n", style="bold")
-            if reasoning_item.summary:
-                for s in reasoning_item.summary:
-                    content.append(f"- {s}\n")
-            if reasoning_item.content:
-                for b in reasoning_item.content:
-                    content.append(f"{b}\n")
+            has_summary = bool(reasoning_item.summary)
+            has_content = bool(reasoning_item.content)
+            if has_summary or has_content:
+                content.append("Reasoning:\n", style="bold")
+                if has_summary:
+                    for s in list(reasoning_item.summary or []):
+                        content.append(f"- {s}\n")
+                if has_content:
+                    for b in list(reasoning_item.content or []):
+                        content.append(f"{b}\n")
 
         # Display action information using action's visualize method
         if self.action:
