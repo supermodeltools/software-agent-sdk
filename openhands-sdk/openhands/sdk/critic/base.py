@@ -1,4 +1,5 @@
 import abc
+from collections.abc import Sequence
 from typing import ClassVar
 
 from pydantic import BaseModel, Field
@@ -31,6 +32,6 @@ class CriticBase(abc.ABC):
 
     @abc.abstractmethod
     def evaluate(
-        self, events: list[LLMConvertibleEvent], git_patch: str | None = None
+        self, events: Sequence[LLMConvertibleEvent], git_patch: str | None = None
     ) -> CriticResult:
         pass
