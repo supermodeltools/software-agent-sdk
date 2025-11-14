@@ -31,10 +31,18 @@ default_model = "openai/gpt-5.1-codex-mini"
 model = os.getenv("LLM_MODEL", default_model)
 assert model.startswith("openai/gpt-5.1"), "Model must be an openai gpt-5.1 variant"
 
+# Force Chat Completions path by using a non-Responses model alias if needed
+if model.startswith("openai/gpt-5.1"):
+    # Litellm treats 'openai/gpt-5.1' via Responses; to avoid the Responses tool-output
+    # coupling for this example, we can strip the provider prefix for chat path.
+    # However, leave as-is to try Responses first; if it errors, instruct user below.
+    pass
+
 llm = LLM(
     model=model,
     api_key=SecretStr(api_key),
-    # Direct OpenAI API, no base_url
+    native_tool_calling=True,  # enable native tool calling (Responses API)
+    reasoning_summary=None,  # avoid OpenAI org verification requirement
 )
 
 # Ensure default tools are registered (terminal/file_editor/task_tracker)
