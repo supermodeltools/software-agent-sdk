@@ -24,7 +24,7 @@ class CriticResult(BaseModel):
         return self.score >= CriticResult.THRESHOLD
 
 
-class BaseCritic(abc.ABC):
+class CriticBase(abc.ABC):
     """A critic is a function that takes in a list of events,
     optional git patch, and returns a score about the quality of those events.
     """

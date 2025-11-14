@@ -5,7 +5,7 @@ This critic only evaluates whether a git patch is non-empty.
 Unlike AgentFinishedCritic, it does not check for proper agent completion.
 """
 
-from openhands.sdk.critic.base import BaseCritic, CriticResult
+from openhands.sdk.critic.base import CriticBase, CriticResult
 from openhands.sdk.event import LLMConvertibleEvent
 from openhands.sdk.logger import get_logger
 
@@ -13,7 +13,7 @@ from openhands.sdk.logger import get_logger
 logger = get_logger(__name__)
 
 
-class EmptyPatchCritic(BaseCritic):
+class EmptyPatchCritic(CriticBase):
     """
     Critic that only evaluates whether a git patch is non-empty.
 

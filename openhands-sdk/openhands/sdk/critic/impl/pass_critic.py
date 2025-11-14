@@ -5,7 +5,7 @@ This critic always returns success, useful when no evaluation is needed
 or when all instances should be considered successful.
 """
 
-from openhands.sdk.critic.base import BaseCritic, CriticResult
+from openhands.sdk.critic.base import CriticBase, CriticResult
 from openhands.sdk.event import LLMConvertibleEvent
 from openhands.sdk.logger import get_logger
 
@@ -13,7 +13,7 @@ from openhands.sdk.logger import get_logger
 logger = get_logger(__name__)
 
 
-class PassCritic(BaseCritic):
+class PassCritic(CriticBase):
     """
     Critic that always returns success.
 

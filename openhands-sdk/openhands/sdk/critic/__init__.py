@@ -1,4 +1,4 @@
-from openhands.sdk.critic.base import BaseCritic, CriticResult
+from openhands.sdk.critic.base import CriticBase, CriticResult
 from openhands.sdk.critic.impl import (
     AgentFinishedCritic,
     EmptyPatchCritic,
@@ -14,7 +14,7 @@ CriticRegistry.register("pass", PassCritic)
 
 
 __all__ = [
-    "BaseCritic",
+    "CriticBase",
     "CriticResult",
     "AgentFinishedCritic",
     "EmptyPatchCritic",

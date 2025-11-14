@@ -6,7 +6,7 @@ This critic evaluates whether an agent properly finished a task by checking:
 2. The generated git patch is non-empty (actual changes were made)
 """
 
-from openhands.sdk.critic.base import BaseCritic, CriticResult
+from openhands.sdk.critic.base import CriticBase, CriticResult
 from openhands.sdk.event import ActionEvent, LLMConvertibleEvent
 from openhands.sdk.logger import get_logger
 
@@ -14,7 +14,7 @@ from openhands.sdk.logger import get_logger
 logger = get_logger(__name__)
 
 
-class AgentFinishedCritic(BaseCritic):
+class AgentFinishedCritic(CriticBase):
     """
     Critic that evaluates whether an agent properly finished a task.
 

@@ -7,7 +7,7 @@ making it easy to add new critics without modifying existing code.
 
 from typing import ClassVar
 
-from openhands.sdk.critic.base import BaseCritic
+from openhands.sdk.critic.base import CriticBase
 
 
 class CriticRegistry:
@@ -18,10 +18,10 @@ class CriticRegistry:
     making it easy to add new critics without modifying existing code.
     """
 
-    _critics: ClassVar[dict[str, type[BaseCritic]]] = {}
+    _critics: ClassVar[dict[str, type[CriticBase]]] = {}
 
     @classmethod
-    def register(cls, name: str, critic_class: type[BaseCritic]) -> None:
+    def register(cls, name: str, critic_class: type[CriticBase]) -> None:
         """
         Register a critic class with a given name.
 
@@ -32,7 +32,7 @@ class CriticRegistry:
         cls._critics[name] = critic_class
 
     @classmethod
-    def create_critic(cls, name: str) -> BaseCritic:
+    def create_critic(cls, name: str) -> CriticBase:
         """
         Create a critic instance by name.
 
