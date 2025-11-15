@@ -7,7 +7,6 @@ import pytest
 from openhands.sdk.critic import (
     AgentFinishedCritic,
     CriticBase,
-    CriticRegistry,
     CriticResult,
     EmptyPatchCritic,
     PassCritic,
@@ -287,91 +286,6 @@ def test_agent_finished_critic_last_action_not_finish():
     result = critic.evaluate(events, patch)
     assert result.score == 0.0
     assert result.success is False
-
-
-def test_critic_registry_register():
-    """Test registering critics in the registry."""
-    # Register a critic (not clearing to preserve defaults)
-    CriticRegistry.register("test_pass", PassCritic)
-
-    # Should be able to retrieve it
-    critic_class = CriticRegistry.get("test_pass")
-    assert critic_class is PassCritic
-
-    # Should be in the list
-    assert "test_pass" in CriticRegistry.list_registered()
-
-
-def test_critic_registry_register_invalid():
-    """Test that registering invalid critics raises errors."""
-    # Empty name
-    with pytest.raises(ValueError):
-        CriticRegistry.register("", PassCritic)
-
-    # Non-string name
-    with pytest.raises(ValueError):
-        CriticRegistry.register(123, PassCritic)  # type: ignore
-
-    # Not a class
-    with pytest.raises(TypeError):
-        CriticRegistry.register("invalid", PassCritic())  # type: ignore
-
-    # Not a CriticBase subclass
-    with pytest.raises(TypeError):
-        CriticRegistry.register("invalid", str)  # type: ignore
-
-
-def test_critic_registry_get_not_found():
-    """Test that getting unregistered critic raises KeyError."""
-    with pytest.raises(KeyError):
-        CriticRegistry.get("nonexistent_critic_xyz123")
-
-
-def test_critic_registry_create():
-    """Test creating critic instances from registry."""
-    # Use existing registration
-    # Create instance
-    critic = CriticRegistry.create("pass")
-    assert isinstance(critic, PassCritic)
-    assert isinstance(critic, CriticBase)
-
-    # Each call should create a new instance
-    critic2 = CriticRegistry.create("pass")
-    assert critic is not critic2
-
-
-def test_critic_registry_default_registrations():
-    """Test that default critics are registered on import."""
-    # These should be registered by __init__.py
-    assert "finish_with_patch" in CriticRegistry.list_registered()
-    assert "empty_patch_critic" in CriticRegistry.list_registered()
-    assert "pass" in CriticRegistry.list_registered()
-
-    # Verify they can be created
-    finish_critic = CriticRegistry.create("finish_with_patch")
-    assert isinstance(finish_critic, AgentFinishedCritic)
-
-    empty_critic = CriticRegistry.create("empty_patch_critic")
-    assert isinstance(empty_critic, EmptyPatchCritic)
-
-    pass_critic = CriticRegistry.create("pass")
-    assert isinstance(pass_critic, PassCritic)
-
-
-def test_critic_registry_duplicate_warning(caplog):
-    """Test that registering duplicate names logs a warning."""
-    # Use a unique name that won't conflict
-    test_name = "duplicate_test_critic_xyz"
-
-    # First registration
-    CriticRegistry.register(test_name, PassCritic)
-
-    # Second registration should log warning
-    CriticRegistry.register(test_name, EmptyPatchCritic)
-
-    # Should use the latest registration
-    critic_class = CriticRegistry.get(test_name)
-    assert critic_class is EmptyPatchCritic
 
 
 def test_critic_base_is_abstract():
