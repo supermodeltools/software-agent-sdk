@@ -5,6 +5,7 @@ from typing import ClassVar
 from pydantic import BaseModel, Field
 
 from openhands.sdk.event import LLMConvertibleEvent
+from openhands.sdk.utils.models import DiscriminatedUnionMixin
 
 
 class CriticResult(BaseModel):
@@ -25,7 +26,7 @@ class CriticResult(BaseModel):
         return self.score >= CriticResult.THRESHOLD
 
 
-class CriticBase(abc.ABC):
+class CriticBase(DiscriminatedUnionMixin, abc.ABC):
     """A critic is a function that takes in a list of events,
     optional git patch, and returns a score about the quality of those events.
     """
