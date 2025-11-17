@@ -5,6 +5,8 @@ This critic only evaluates whether a git patch is non-empty.
 Unlike AgentFinishedCritic, it does not check for proper agent completion.
 """
 
+from collections.abc import Sequence
+
 from openhands.sdk.critic.base import CriticBase, CriticResult
 from openhands.sdk.event import LLMConvertibleEvent
 from openhands.sdk.logger import get_logger
@@ -26,7 +28,7 @@ class EmptyPatchCritic(CriticBase):
 
     def evaluate(
         self,
-        events: list[LLMConvertibleEvent],  # noqa: ARG002
+        events: Sequence[LLMConvertibleEvent],  # noqa: ARG002
         git_patch: str | None = None,
     ) -> CriticResult:
         """
