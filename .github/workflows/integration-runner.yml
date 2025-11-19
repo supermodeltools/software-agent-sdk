@@ -239,7 +239,6 @@ jobs:
                   echo "$COMMENT_BODY" | gh pr comment ${{ github.event.pull_request.number }} --body-file -
               env:
                   GH_TOKEN: ${{ github.token }}
-                  PYTHONPATH: ${{ github.workspace }}
 
             - name: Read consolidated report for tracker issue
               if: github.event_name == 'schedule'
@@ -250,8 +249,6 @@ jobs:
                   echo "report<<EOF" >> $GITHUB_OUTPUT
                   echo "$REPORT_CONTENT" >> $GITHUB_OUTPUT
                   echo "EOF" >> $GITHUB_OUTPUT
-              env:
-                  PYTHONPATH: ${{ github.workspace }}
 
             - name: Comment with results on tracker issue
               if: github.event_name == 'schedule'
