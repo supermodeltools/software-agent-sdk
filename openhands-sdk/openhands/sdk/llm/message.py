@@ -464,7 +464,9 @@ class Message(BaseModel):
                     }
                 )
             # Include prior turn's reasoning item exactly as received (if any)
-            if self.responses_reasoning_item is not None:
+            # Note: OpenAI Responses API requires reasoning items to be followed by
+            # either a message or tool_call item. Only include if we have content or tool_calls.
+            if self.responses_reasoning_item is not None and (content_items or self.tool_calls):
                 ri = self.responses_reasoning_item
                 # Only send back if we have an id; required by the param schema
                 if ri.id is not None:

@@ -258,14 +258,33 @@ class Agent(AgentBase):
                 self._execute_actions(conversation, action_events, on_event)
 
         else:
-            logger.info("LLM produced a message response - awaits user input")
-            state.execution_status = ConversationExecutionStatus.FINISHED
-            msg_event = MessageEvent(
-                source="agent",
-                llm_message=message,
-                llm_response_id=llm_response.id,
+            # Check if this is a reasoning-only response (e.g., from reasoning models)
+            # If so, don't finish - let the agent continue to generate tool calls
+            has_reasoning = (
+                message.responses_reasoning_item is not None
+                or message.reasoning_content is not None
+                or (message.thinking_blocks and len(message.thinking_blocks) > 0)
             )
-            on_event(msg_event)
+            if has_reasoning:
+                logger.info(
+                    "LLM produced reasoning without tool calls - continuing agent loop"
+                )
+                msg_event = MessageEvent(
+                    source="agent",
+                    llm_message=message,
+                    llm_response_id=llm_response.id,
+                )
+                on_event(msg_event)
+                # Don't set FINISHED - let the loop continue
+            else:
+                logger.info("LLM produced a message response - awaits user input")
+                state.execution_status = ConversationExecutionStatus.FINISHED
+                msg_event = MessageEvent(
+                    source="agent",
+                    llm_message=message,
+                    llm_response_id=llm_response.id,
+                )
+                on_event(msg_event)
 
         # If using VLLM, we can get the raw prompt and response tokens
         # that can be useful for RL training.
