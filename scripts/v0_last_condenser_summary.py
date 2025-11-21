@@ -258,7 +258,9 @@ def format_bootstrap_prompt(payload: dict[str, Any]) -> str:
 
     prompt_lines.append(f"Conversation ID (V0): {identifier}")
 
-    if forgotten_end_id is not None and summary.strip():
+    has_summary = forgotten_end_id is not None and summary.strip()
+
+    if has_summary:
         prompt_lines.append(
             "All events with id <= "
             f"{forgotten_end_id} have been summarized into the "
@@ -273,10 +275,17 @@ def format_bootstrap_prompt(payload: dict[str, Any]) -> str:
         prompt_lines.append("")
 
     prompt_lines.append(
-        "After that summary (or, if none, from the beginning), here are the "
-        "events from the old V0 conversation in chronological order. These are "
-        "provided as raw JSON and represent the detailed history available to "
-        "you."
+        (
+            "After that summary, here are the events from the old V0 conversation "
+            "in chronological order. These are provided as raw JSON and represent "
+            "the detailed history available to you."
+        )
+        if has_summary
+        else (
+            "Here are the events from the old V0 conversation in chronological "
+            "order. These are provided as raw JSON and represent the detailed "
+            "history available to you."
+        )
     )
     prompt_lines.append("")
 
