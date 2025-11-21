@@ -142,6 +142,17 @@ def load_events(
             # its summary represents earlier history.
             continue
 
+        # If we have a condensation boundary, never cross back before it.
+        if last_condensation_args is not None:
+            end_id = last_condensation_args.get("forgotten_events_end_id")
+            try:
+                event_id = int(event_file.stem)
+            except ValueError:
+                event_id = None
+
+            if event_id is not None and end_id is not None and event_id <= end_id:
+                break
+
         recent_events.append(event)
 
         if is_counted_event(event):
