@@ -698,7 +698,8 @@ class TestEventServiceSendMessage:
         with patch("asyncio.get_running_loop") as mock_get_loop:
             mock_loop = MagicMock()
             mock_get_loop.return_value = mock_loop
-            mock_loop.run_in_executor.return_value = self._mock_executor()
+            # Use side_effect to create a new coroutine for each call
+            mock_loop.run_in_executor.side_effect = lambda *args: self._mock_executor()
 
             # Call send_message with run=True
             await event_service.send_message(message, run=True)
