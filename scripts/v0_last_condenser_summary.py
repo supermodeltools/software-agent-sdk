@@ -2,9 +2,28 @@
 from a V0-style OpenHands conversation directory and generate a V1
 bootstrap prompt.
 
-This script is intentionally dumb about the full V0 event schema. It only
+This script doesn't know the full V0 event schema. It only
 looks for events whose JSON contains a ``forgotten_events_end_id`` field in
 ``action.args`` (as produced by ``CondensationAction`` in V0).
+
+The serialized event is like:
+```
+{
+  "id": 5202,
+  "timestamp": "...",
+  "source": "agent",
+  "message": "Summary: ...",
+  "action": "condensation",
+  "llm_metrics": {...},
+  "args": {
+    "forgotten_events_start_id": 4479,
+    "forgotten_events_end_id": 4860,
+    "summary": "USER_CONTEXT: ...",
+    "summary_offset": 8,
+    ...
+  }
+}
+```
 
 From those it selects the *latest* condensation event, then:
 
