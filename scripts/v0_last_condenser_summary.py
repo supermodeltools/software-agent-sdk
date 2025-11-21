@@ -211,6 +211,10 @@ def is_counted_event(event: dict[str, Any]) -> bool:
         and event.get("observation") == "agent_state_changed"
     ):
         return False
+
+    if event.get("source") == "user" and event.get("action") == "change_agent_state":
+        return False
+
     return True
 
 
