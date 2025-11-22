@@ -34,13 +34,6 @@ default_model = "openai/gpt-5.1-codex-mini"
 model = os.getenv("LLM_MODEL", default_model)
 assert model.startswith("openai/gpt-5.1"), "Model must be an openai gpt-5.1 variant"
 
-# Force Chat Completions path by using a non-Responses model alias if needed
-if model.startswith("openai/gpt-5.1"):
-    # Litellm treats 'openai/gpt-5.1' via Responses; to avoid the Responses tool-output
-    # coupling for this example, we can strip the provider prefix for chat path.
-    # However, leave as-is to try Responses first; if it errors, instruct user below.
-    pass
-
 llm = LLM(
     model=model,
     api_key=SecretStr(api_key),
