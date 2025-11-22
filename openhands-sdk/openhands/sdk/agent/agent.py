@@ -269,23 +269,17 @@ class Agent(AgentBase):
                 isinstance(c, TextContent) and c.text.strip() for c in message.content
             )
 
-            if has_reasoning or has_content:
-                msg_event = MessageEvent(
-                    source="agent",
-                    llm_message=message,
-                    llm_response_id=llm_response.id,
-                )
-                on_event(msg_event)
-                # Don't set FINISHED - let the loop continue
-            else:
-                # No tool calls, no reasoning, no content - this is unusual
+            # Log warning if there's no tool calls, reasoning, or content
+            if not has_reasoning and not has_content:
                 logger.warning("LLM produced empty response - continuing agent loop")
-                msg_event = MessageEvent(
-                    source="agent",
-                    llm_message=message,
-                    llm_response_id=llm_response.id,
-                )
-                on_event(msg_event)
+
+            # Always emit the message event and continue the loop
+            msg_event = MessageEvent(
+                source="agent",
+                llm_message=message,
+                llm_response_id=llm_response.id,
+            )
+            on_event(msg_event)
 
         # If using VLLM, we can get the raw prompt and response tokens
         # that can be useful for RL training.
