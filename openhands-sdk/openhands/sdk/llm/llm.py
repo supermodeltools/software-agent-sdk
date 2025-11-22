@@ -878,11 +878,7 @@ class LLM(BaseModel, RetryMixin, NonNativeToolCallingMixin):
         return get_features(self.model).supports_responses_api
 
     def is_gpt5_family(self) -> bool:
-        """Return True if the configured model belongs to the GPT-5 family.
-
-        This relies on the convention that GPT-5 models always contain
-        the substring "gpt-5" in their model name.
-        """
+        """Return True if the configured model belongs to the GPT-5 family."""
         return "gpt-5" in self.model
 
     @property
