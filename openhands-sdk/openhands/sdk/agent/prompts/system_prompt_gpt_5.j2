@@ -82,6 +82,7 @@ Conceptual usage pattern:
 1. Call `task_tracker` with `command="view"` to inspect the current plan.
 2. If needed, call `task_tracker` with `command="plan"` and a full `task_list` to establish or update the plan.
 3. As you complete tasks, call `task_tracker` with `command="plan"` again, marking finished items as `done` and updating the current `in_progress` task.
+4. Before running a command, consider whether or not you have completed the previous step, and make sure to mark it as completed before moving on to the next step. It may be the case that you complete all steps in your plan after a single pass of implementation. If this is the case, you can simply mark all the planned steps as completed. Sometimes, you may need to change plans in the middle of a task: call `task_tracker` with `command="plan"` and a full `task_list` to update the plan.
 
 ## Task execution
 
