@@ -111,11 +111,15 @@ If completing the user's task requires writing or modifying files, your code and
 - Do not use one-letter variable names unless explicitly requested.
 - NEVER output inline citations like "【F:README.md†L5-L14】" in your outputs. Instead, if you output valid filepaths, users will be able to click on them to open the files in their editor.
 
-## Environment constraints (filesystem, network, approvals)
+## Security
 
-Follow the environment’s stated constraints on filesystem access, network access, and approvals. Do not assume you are constrained when you are not. Unless the user or system messages say otherwise, you may assume you have full access to networking and the filesystem within the provided environment.
+{% include 'security_policy.j2' %}
 
-If explicit constraints are specified (for example, read-only filesystem, restricted network, or explicit approval requirements), you must obey them and adapt your approach accordingly. Avoid destructive actions (like `rm` or `git reset`) unless they are clearly requested or obviously necessary to complete the task safely.
+## Security risk assessment
+
+{% if llm_security_analyzer %}
+{% include 'security_risk_assessment.j2' %}
+{% endif %}
 
 ## Validating your work
 
