@@ -183,10 +183,6 @@ jobs:
                   MAX_BUILD_WORKERS: ${{ env.MAX_BUILD_WORKERS }}
               run: |
                   set -euo pipefail
-                  if [ -z "$PAT_TOKEN" ]; then
-                    echo "Missing PAT_TOKEN for dispatching benchmarks build" >&2
-                    exit 1
-                  fi
                   SDK_SHA="${{ steps.get-sha.outputs.sdk_sha }}"
 
                   # Record timestamp before dispatch to avoid race condition
@@ -222,10 +218,6 @@ jobs:
                   DISPATCH_TIME: ${{ steps.build-dispatch.outputs.dispatch_time }}
               run: |
                   set -euo pipefail
-                  if [ -z "$PAT_TOKEN" ]; then
-                    echo "Missing PAT_TOKEN for checking benchmarks build status" >&2
-                    exit 1
-                  fi
                   WORKFLOW_ID="${{ env.BENCHMARKS_BUILD_WORKFLOW }}"
                   REPO="${{ env.BENCHMARKS_REPO }}"
                   MAX_ATTEMPTS=40
@@ -280,10 +272,6 @@ jobs:
                   EVAL_REPO: ${{ env.EVAL_REPO }}
                   EVAL_WORKFLOW: ${{ env.EVAL_WORKFLOW }}
               run: |
-                  if [ -z "$PAT_TOKEN" ]; then
-                    echo "Missing PAT_TOKEN for dispatching evaluation workflow" >&2
-                    exit 1
-                  fi
                   echo "Dispatching evaluation workflow with SDK commit: $SDK_SHA"
                   PAYLOAD=$(jq -n \
                     --arg sdk "$SDK_SHA" \
