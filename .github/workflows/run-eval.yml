@@ -206,7 +206,7 @@ jobs:
                     --arg max_workers "$MAX_BUILD_WORKERS" \
                     --arg n_limit "$EVAL_LIMIT" \
                     --arg sdk_commit "$SDK_SHA" \
-                    '{ref:"add-sdk-commit-param", inputs: {dataset:$dataset, split:$split, "max-workers":$max_workers, "n-limit":$n_limit, "sdk-commit":$sdk_commit}}')
+                    '{ref:"fix-sdk-sha-detection", inputs: {dataset:$dataset, split:$split, "max-workers":$max_workers, "n-limit":$n_limit, "sdk-commit":$sdk_commit}}')
                   RESPONSE=$(curl -sS -o /tmp/build-dispatch.out -w "%{http_code}" -X POST \
                     -H "Authorization: token $PAT_TOKEN" \
                     -H "Accept: application/vnd.github+json" \
@@ -234,7 +234,7 @@ jobs:
                     RUNS=$(curl -sS \
                       -H "Authorization: token $PAT_TOKEN" \
                       -H "Accept: application/vnd.github+json" \
-                      "https://api.github.com/repos/${REPO}/actions/workflows/${WORKFLOW_ID}/runs?per_page=1&branch=add-sdk-commit-param")
+                      "https://api.github.com/repos/${REPO}/actions/workflows/${WORKFLOW_ID}/runs?per_page=1&branch=fix-sdk-sha-detection")
                     STATUS=$(echo "$RUNS" | jq -r '.workflow_runs[0].status')
                     CONCL=$(echo "$RUNS" | jq -r '.workflow_runs[0].conclusion')
                     RUN_ID=$(echo "$RUNS" | jq -r '.workflow_runs[0].id')
