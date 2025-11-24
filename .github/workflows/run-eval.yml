@@ -97,9 +97,17 @@ jobs:
               env:
                   DEFAULT_MODEL: ${{ steps.allowlists.outputs.default_model }}
                   ALLOWED_MODELS_JSON: ${{ steps.allowlists.outputs.allowed_models }}
-                  BENCHMARKS_PAT_INPUT: ''
+                  PAT_TOKEN_DEFAULT: ${{ secrets.ALLHANDS_BOT_GITHUB_PAT }}
               run: |
                   set -euo pipefail
+
+                  # Set PAT token for cross-repo workflow dispatch
+                  PAT_TOKEN="$PAT_TOKEN_DEFAULT"
+                  if [ -z "$PAT_TOKEN" ]; then
+                    echo "Missing PAT token" >&2
+                    exit 1
+                  fi
+                  echo "PAT_TOKEN=$PAT_TOKEN" >> "$GITHUB_ENV"
 
                   # Determine eval limit based on trigger
                   if [ "${{ github.event_name }}" = "pull_request_target" ]; then
@@ -169,7 +177,6 @@ jobs:
             - name: Dispatch benchmarks image build
               id: build-dispatch
               env:
-                  PAT_TOKEN: ${{ secrets.ALLHANDS_BOT_GITHUB_PAT }}
                   EVAL_LIMIT: ${{ steps.params.outputs.eval_limit }}
                   DATASET: ${{ env.DATASET }}
                   SPLIT: ${{ env.SPLIT }}
@@ -202,8 +209,6 @@ jobs:
                   echo "bench_build_dispatched=true" >> "$GITHUB_OUTPUT"
 
             - name: Wait for benchmarks build completion
-              env:
-                  PAT_TOKEN: ${{ secrets.ALLHANDS_BOT_GITHUB_PAT }}
               run: |
                   set -euo pipefail
                   if [ -z "$PAT_TOKEN" ]; then
@@ -238,7 +243,6 @@ jobs:
 
             - name: Dispatch evaluation workflow
               env:
-                  PAT_TOKEN: ${{ secrets.ALLHANDS_BOT_GITHUB_PAT }}
                   SDK_SHA: ${{ steps.get-sha.outputs.sdk_sha }}
                   EVAL_LIMIT: ${{ steps.params.outputs.eval_limit }}
                   MODELS: ${{ steps.params.outputs.models }}
