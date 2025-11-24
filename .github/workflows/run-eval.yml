@@ -192,7 +192,7 @@ jobs:
                     --arg n_limit "$EVAL_LIMIT" \
                     '{ref:"main", inputs: {dataset:$dataset, split:$split, "max-workers":$max_workers, "n-limit":$n_limit}}')
                   RESPONSE=$(curl -sS -o /tmp/build-dispatch.out -w "%{http_code}" -X POST \
-                    -H "Authorization: Bearer $PAT_TOKEN" \
+                    -H "Authorization: token $PAT_TOKEN" \
                     -H "Accept: application/vnd.github+json" \
                     -d "$PAYLOAD" \
                     "https://api.github.com/repos/${{ env.BENCHMARKS_REPO }}/actions/workflows/${{ env.BENCHMARKS_BUILD_WORKFLOW }}/dispatches")
@@ -219,7 +219,7 @@ jobs:
                   SLEEP_SECONDS=30
                   for i in $(seq 1 $MAX_ATTEMPTS); do
                     RUNS=$(curl -sS \
-                      -H "Authorization: Bearer $PAT_TOKEN" \
+                      -H "Authorization: token $PAT_TOKEN" \
                       -H "Accept: application/vnd.github+json" \
                       "https://api.github.com/repos/${REPO}/actions/workflows/${WORKFLOW_ID}/runs?per_page=1&branch=main")
                     STATUS=$(echo "$RUNS" | jq -r '.workflow_runs[0].status')
@@ -239,9 +239,31 @@ jobs:
                   echo "Timed out waiting for benchmarks build to finish" >&2
                   exit 1
 
+            - name: Verify eval dispatch token
+              env:
+                  PAT_TOKEN: ${{ steps.params.outputs.benchmarks_pat_input || secrets.ALLHANDS_BOT_GITHUB_PAT || secrets.PAT_TOKEN || 
+                      secrets.BENCHMARKS_PAT || secrets.EVAL_DISPATCH_TOKEN || secrets.GITHUB_TOKEN }}
+              run: |
+                  set -euo pipefail
+                  if [ -z "$PAT_TOKEN" ]; then
+                    echo "Missing PAT_TOKEN for evaluation dispatch" >&2
+                    exit 1
+                  fi
+                  USER_STATUS=$(curl -sS -o /tmp/token_user.out -w "%{http_code}" -H "Authorization: token $PAT_TOKEN" https://api.github.com/user)
+                  echo "Token /user status: $USER_STATUS"
+                  REPO_STATUS=$(curl -sS -o /tmp/token_repo.out -w "%{http_code}" -H "Authorization: token $PAT_TOKEN" https://api.github.com/repos/${{ env.EVAL_REPO }})
+                  echo "Token repo status: $REPO_STATUS"
+                  if [ "$USER_STATUS" != "200" ] || [ "$REPO_STATUS" != "200" ]; then
+                    echo "Token does not have access to eval repo; responses:" >&2
+                    cat /tmp/token_user.out >&2 || true
+                    cat /tmp/token_repo.out >&2 || true
+                    exit 1
+                  fi
+
             - name: Dispatch evaluation workflow
               env:
-                  PAT_TOKEN: ${{ secrets.ALLHANDS_BOT_GITHUB_PAT || secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
+                  PAT_TOKEN: ${{ steps.params.outputs.benchmarks_pat_input || secrets.ALLHANDS_BOT_GITHUB_PAT || secrets.PAT_TOKEN || 
+                      secrets.BENCHMARKS_PAT || secrets.EVAL_DISPATCH_TOKEN || secrets.GITHUB_TOKEN }}
                   SDK_SHA: ${{ steps.params.outputs.sdk_ref }}
                   EVAL_LIMIT: ${{ steps.params.outputs.eval_limit }}
                   MODELS: ${{ steps.params.outputs.models }}
@@ -258,7 +280,7 @@ jobs:
                     --arg models "$MODELS" \
                     '{ref: "main", inputs: {sdk_commit: $sdk, eval_limit: $eval_limit, models: $models}}')
                   RESPONSE=$(curl -sS -o /tmp/dispatch.out -w "%{http_code}" -X POST \
-                    -H "Authorization: Bearer $PAT_TOKEN" \
+                    -H "Authorization: token $PAT_TOKEN" \
                     -H "Accept: application/vnd.github+json" \
                     -d "$PAYLOAD" \
                     "https://api.github.com/repos/${EVAL_REPO}/actions/workflows/${EVAL_WORKFLOW}/dispatches")
