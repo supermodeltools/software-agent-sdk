@@ -36,10 +36,6 @@ on:
                 description: Reason for manual trigger
                 required: false
                 default: ''
-            benchmarks_pat:
-                description: PAT with access to dispatch benchmarks workflow (optional if secret is configured)
-                required: false
-                default: ''
 
 env:
     BENCHMARKS_REPO: OpenHands/benchmarks
@@ -105,8 +101,8 @@ jobs:
               env:
                   DEFAULT_MODEL: ${{ steps.allowlists.outputs.default_model }}
                   ALLOWED_MODELS_JSON: ${{ steps.allowlists.outputs.allowed_models }}
-                  BENCHMARKS_PAT_INPUT: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.benchmarks_pat || '' }}
-                  SDK_REF_INPUT: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.sdk_ref || '' }}
+                  BENCHMARKS_PAT_INPUT: ''
+                  SDK_REF_INPUT: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.branch || '' }}
               run: |
                   set -euo pipefail
 
@@ -158,7 +154,6 @@ jobs:
                   echo "models=$MODELS" >> "$GITHUB_OUTPUT"
                   echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
                   echo "trigger_desc=$TRIGGER_DESCRIPTION" >> "$GITHUB_OUTPUT"
-                  echo "benchmarks_pat_input=$BENCHMARKS_PAT_INPUT" >> "$GITHUB_OUTPUT"
                   echo "sdk_ref_input=$SDK_REF_INPUT" >> "$GITHUB_OUTPUT"
 
             - name: Checkout evaluated ref for PRs
@@ -173,8 +168,7 @@ jobs:
             - name: Dispatch benchmarks image build
               id: build-dispatch
               env:
-                  PAT_TOKEN: ${{ steps.params.outputs.benchmarks_pat_input || secrets.ALLHANDS_BOT_GITHUB_PAT || secrets.PAT_TOKEN || 
-                      secrets.BENCHMARKS_PAT }}
+                  PAT_TOKEN: ${{ secrets.ALLHANDS_BOT_GITHUB_PAT || secrets.PAT_TOKEN || secrets.BENCHMARKS_PAT }}
                   EVAL_LIMIT: ${{ steps.params.outputs.eval_limit }}
                   DATASET: ${{ env.DATASET }}
                   SPLIT: ${{ env.SPLIT }}
@@ -205,8 +199,7 @@ jobs:
 
             - name: Wait for benchmarks build completion
               env:
-                  PAT_TOKEN: ${{ steps.params.outputs.benchmarks_pat_input || secrets.ALLHANDS_BOT_GITHUB_PAT || secrets.PAT_TOKEN || 
-                      secrets.BENCHMARKS_PAT }}
+                  PAT_TOKEN: ${{ secrets.ALLHANDS_BOT_GITHUB_PAT || secrets.PAT_TOKEN || secrets.BENCHMARKS_PAT }}
               run: |
                   set -euo pipefail
                   if [ -z "$PAT_TOKEN" ]; then
@@ -241,8 +234,7 @@ jobs:
 
             - name: Verify eval dispatch token
               env:
-                  PAT_TOKEN: ${{ steps.params.outputs.benchmarks_pat_input || secrets.ALLHANDS_BOT_GITHUB_PAT || secrets.PAT_TOKEN || 
-                      secrets.BENCHMARKS_PAT || secrets.EVAL_DISPATCH_TOKEN || secrets.GITHUB_TOKEN }}
+                  PAT_TOKEN: ${{ secrets.EVAL_DISPATCH_TOKEN || secrets.ALLHANDS_BOT_GITHUB_PAT || secrets.PAT_TOKEN || secrets.BENCHMARKS_PAT }}
               run: |
                   set -euo pipefail
                   if [ -z "$PAT_TOKEN" ]; then
@@ -262,8 +254,7 @@ jobs:
 
             - name: Dispatch evaluation workflow
               env:
-                  PAT_TOKEN: ${{ steps.params.outputs.benchmarks_pat_input || secrets.ALLHANDS_BOT_GITHUB_PAT || secrets.PAT_TOKEN || 
-                      secrets.BENCHMARKS_PAT || secrets.EVAL_DISPATCH_TOKEN || secrets.GITHUB_TOKEN }}
+                  PAT_TOKEN: ${{ secrets.EVAL_DISPATCH_TOKEN || secrets.ALLHANDS_BOT_GITHUB_PAT || secrets.PAT_TOKEN || secrets.BENCHMARKS_PAT }}
                   SDK_SHA: ${{ steps.params.outputs.sdk_ref }}
                   EVAL_LIMIT: ${{ steps.params.outputs.eval_limit }}
                   MODELS: ${{ steps.params.outputs.models }}
