@@ -188,7 +188,12 @@ jobs:
                     exit 1
                   fi
                   SDK_SHA="${{ steps.get-sha.outputs.sdk_sha }}"
-                  echo "Dispatching benchmarks build with SDK commit: $SDK_SHA"
+
+                  # Record timestamp before dispatch to avoid race condition
+                  DISPATCH_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+                  echo "dispatch_time=$DISPATCH_TIME" >> "$GITHUB_OUTPUT"
+
+                  echo "Dispatching benchmarks build with SDK commit: $SDK_SHA at $DISPATCH_TIME"
                   PAYLOAD=$(jq -n \
                     --arg dataset "$DATASET" \
                     --arg split "$SPLIT" \
@@ -206,9 +211,15 @@ jobs:
                     cat /tmp/build-dispatch.out >&2
                     exit 1
                   fi
+
+                  # Wait for run to be created in GitHub's system
+                  echo "Waiting 10 seconds for workflow run to be created..."
+                  sleep 10
                   echo "bench_build_dispatched=true" >> "$GITHUB_OUTPUT"
 
             - name: Wait for benchmarks build completion
+              env:
+                  DISPATCH_TIME: ${{ steps.build-dispatch.outputs.dispatch_time }}
               run: |
                   set -euo pipefail
                   if [ -z "$PAT_TOKEN" ]; then
@@ -219,14 +230,34 @@ jobs:
                   REPO="${{ env.BENCHMARKS_REPO }}"
                   MAX_ATTEMPTS=40
                   SLEEP_SECONDS=30
+
+                  # Find the run that was created after our dispatch
+                  echo "Looking for workflow run created after $DISPATCH_TIME"
+                  RUN_ID=""
                   for i in $(seq 1 $MAX_ATTEMPTS); do
+                    # Query for recent runs on main branch, get more results to avoid race
                     RUNS=$(curl -sS \
                       -H "Authorization: token $PAT_TOKEN" \
                       -H "Accept: application/vnd.github+json" \
-                      "https://api.github.com/repos/${REPO}/actions/workflows/${WORKFLOW_ID}/runs?per_page=1&branch=main")
-                    STATUS=$(echo "$RUNS" | jq -r '.workflow_runs[0].status')
-                    CONCL=$(echo "$RUNS" | jq -r '.workflow_runs[0].conclusion')
-                    RUN_ID=$(echo "$RUNS" | jq -r '.workflow_runs[0].id')
+                      "https://api.github.com/repos/${REPO}/actions/workflows/${WORKFLOW_ID}/runs?per_page=5&branch=main&created=>=$DISPATCH_TIME")
+
+                    # Find the first run created at or after dispatch time
+                    if [ -z "$RUN_ID" ]; then
+                      RUN_ID=$(echo "$RUNS" | jq -r ".workflow_runs[] | select(.created_at >= \"$DISPATCH_TIME\") | .id" | head -1)
+                      if [ -n "$RUN_ID" ] && [ "$RUN_ID" != "null" ]; then
+                        echo "Found workflow run: $RUN_ID"
+                      else
+                        echo "Waiting for workflow run to appear (attempt $i/$MAX_ATTEMPTS)..."
+                        sleep 5
+                        continue
+                      fi
+                    fi
+
+                    # Check status of our specific run
+                    RUN_DATA=$(echo "$RUNS" | jq -r ".workflow_runs[] | select(.id == $RUN_ID)")
+                    STATUS=$(echo "$RUN_DATA" | jq -r '.status')
+                    CONCL=$(echo "$RUN_DATA" | jq -r '.conclusion')
+
                     echo "Benchmarks build run ${RUN_ID}: status=${STATUS}, conclusion=${CONCL}"
                     if [ "$STATUS" = "completed" ]; then
                       if [ "$CONCL" = "success" ]; then
