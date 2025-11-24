@@ -98,7 +98,6 @@ jobs:
                   DEFAULT_MODEL: ${{ steps.allowlists.outputs.default_model }}
                   ALLOWED_MODELS_JSON: ${{ steps.allowlists.outputs.allowed_models }}
                   BENCHMARKS_PAT_INPUT: ''
-                  SDK_REF_INPUT: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.sdk_ref || '' }}
               run: |
                   set -euo pipefail
 
@@ -122,7 +121,7 @@ jobs:
                     TRIGGER_DESCRIPTION="Release ${{ github.event.release.tag_name }}"
                   else
                     EVAL_LIMIT="${{ github.event.inputs.eval_limit }}"
-                    SDK_REF="${SDK_REF_INPUT:-${{ github.event.inputs.sdk_ref }}}"
+                    SDK_REF="${{ github.event.inputs.sdk_ref }}"
                     PR_NUMBER=""
                     REASON="${{ github.event.inputs.reason }}"
                     if [ -z "$REASON" ]; then
