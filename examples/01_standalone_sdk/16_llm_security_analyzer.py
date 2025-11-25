@@ -16,7 +16,6 @@ from openhands.sdk.conversation.state import (
     ConversationState,
 )
 from openhands.sdk.security.confirmation_policy import ConfirmRisky
-from openhands.sdk.security.llm_analyzer import LLMSecurityAnalyzer
 from openhands.sdk.tool import Tool
 from openhands.tools.file_editor import FileEditorTool
 from openhands.tools.terminal import TerminalTool
@@ -111,9 +110,8 @@ tools = [
     Tool(name=FileEditorTool.name),
 ]
 
-# Agent with security analyzer
-security_analyzer = LLMSecurityAnalyzer()
-agent = Agent(llm=llm, tools=tools, security_analyzer=security_analyzer)
+# Agent (security analyzer functionality has been deprecated and removed)
+agent = Agent(llm=llm, tools=tools)
 
 # Conversation with persisted filestore
 conversation = Conversation(
