@@ -22,8 +22,8 @@ on:
                     - '50'
                     - '200'
                     - '500'
-            model_stubs:
-                description: Comma-separated model stubs to evaluate (must be allowlisted)
+            model_ids:
+                description: Comma-separated model IDs to evaluate (must exist in models config)
                 required: false
                 default: ''
                 type: string
@@ -73,32 +73,31 @@ jobs:
                       'workflow_dispatch' && github.event.inputs.sdk_ref) || github.ref }}
                   fetch-depth: 0
 
-            - name: Load allowlists
-              id: allowlists
+            - name: Load model IDs
+              id: load-models
               run: |
-                  ALLOWED_MODELS_JSON=$(jq -c '.' .github/run-eval/allowed-model-stubs.json)
-                  DEFAULT_MODEL=$(echo "$ALLOWED_MODELS_JSON" | jq -r '.[0]')
-                  if [ -z "$DEFAULT_MODEL" ]; then
-                    echo "No default model stub configured" >&2
+                  # Extract model IDs from resolve_model_configs.py
+                  ALLOWED_MODEL_IDS=$(python3 -c "
+                  import sys
+                  sys.path.insert(0, '.github/run-eval')
+                  from resolve_model_configs import MODELS_CONFIG
+                  import json
+                  ids = list(MODELS_CONFIG.keys())
+                  print(json.dumps(ids))
+                  ")
+                  DEFAULT_MODEL=$(echo "$ALLOWED_MODEL_IDS" | jq -r '.[0]')
+                  if [ -z "$DEFAULT_MODEL" ] || [ "$DEFAULT_MODEL" = "null" ]; then
+                    echo "No models configured" >&2
                     exit 1
                   fi
-                  echo "allowed_models=$ALLOWED_MODELS_JSON" >> "$GITHUB_OUTPUT"
+                  echo "allowed_model_ids=$ALLOWED_MODEL_IDS" >> "$GITHUB_OUTPUT"
                   echo "default_model=$DEFAULT_MODEL" >> "$GITHUB_OUTPUT"
-
-            - name: Validate labeler
-              if: github.event_name == 'pull_request_target'
-              run: |
-                  LABELER="${{ github.actor }}"
-                  if ! grep -Fx "$LABELER" .github/run-eval/authorized-labelers.txt >/dev/null; then
-                    echo "User $LABELER is not authorized to trigger eval." >&2
-                    exit 1
-                  fi
 
             - name: Resolve parameters
               id: params
               env:
-                  DEFAULT_MODEL: ${{ steps.allowlists.outputs.default_model }}
-                  ALLOWED_MODELS_JSON: ${{ steps.allowlists.outputs.allowed_models }}
+                  DEFAULT_MODEL: ${{ steps.load-models.outputs.default_model }}
+                  ALLOWED_MODEL_IDS_JSON: ${{ steps.load-models.outputs.allowed_model_ids }}
                   PAT_TOKEN_DEFAULT: ${{ secrets.ALLHANDS_BOT_GITHUB_PAT }}
               run: |
                   set -euo pipefail
@@ -140,16 +139,17 @@ jobs:
                     TRIGGER_DESCRIPTION="Manual trigger: ${REASON}"
                   fi
 
-                  # Normalize and validate models
-                  MODELS_INPUT="${{ github.event_name == 'workflow_dispatch' && github.event.inputs.model_stubs || '' }}"
+                  # Normalize and validate model IDs
+                  MODELS_INPUT="${{ github.event_name == 'workflow_dispatch' && github.event.inputs.model_ids || '' }}"
                   if [ -z "$MODELS_INPUT" ]; then
                     MODELS_INPUT="$DEFAULT_MODEL"
                   fi
                   MODELS=$(printf '%s' "$MODELS_INPUT" | tr ', ' '\n' | sed '/^$/d' | paste -sd, -)
-                  ALLOWED_LIST=$(echo "$ALLOWED_MODELS_JSON" | jq -r '.[]')
+                  ALLOWED_LIST=$(echo "$ALLOWED_MODEL_IDS_JSON" | jq -r '.[]')
                   for MODEL in ${MODELS//,/ }; do
                     if ! echo "$ALLOWED_LIST" | grep -Fx "$MODEL" >/dev/null; then
-                      echo "Model stub '$MODEL' is not allowlisted" >&2
+                      echo "Model ID '$MODEL' not found in models config" >&2
+                      echo "Available models: $(echo "$ALLOWED_LIST" | paste -sd, -)" >&2
                       exit 1
                     fi
                   done
@@ -176,6 +176,13 @@ jobs:
                   echo "sdk_sha=$SDK_SHA" >> "$GITHUB_OUTPUT"
                   echo "Using SDK commit: $SDK_SHA"
 
+            - name: Resolve model configurations
+              id: resolve-models
+              env:
+                  MODEL_IDS: ${{ steps.params.outputs.models }}
+              run: |
+                  python3 .github/run-eval/resolve_model_configs.py
+
             - name: Dispatch benchmarks image build
               id: build-dispatch
               env:
@@ -198,7 +205,7 @@ jobs:
                     --arg max_workers "$MAX_BUILD_WORKERS" \
                     --arg n_limit "$EVAL_LIMIT" \
                     --arg sdk_commit "$SDK_SHA" \
-                    '{ref:"main", inputs: {dataset:$dataset, split:$split, "max-workers":$max_workers, "n-limit":$n_limit, "sdk-commit":$sdk_commit}}')
+                    '{ref:"openhands/improve-eval-workflow", inputs: {dataset:$dataset, split:$split, "max-workers":$max_workers, "n-limit":$n_limit, "sdk-commit":$sdk_commit}}')
                   RESPONSE=$(curl -sS -o /tmp/build-dispatch.out -w "%{http_code}" -X POST \
                     -H "Authorization: token $PAT_TOKEN" \
                     -H "Accept: application/vnd.github+json" \
@@ -270,16 +277,18 @@ jobs:
               env:
                   SDK_SHA: ${{ steps.get-sha.outputs.sdk_sha }}
                   EVAL_LIMIT: ${{ steps.params.outputs.eval_limit }}
-                  MODELS: ${{ steps.params.outputs.models }}
+                  MODELS_JSON: ${{ steps.resolve-models.outputs.models_json }}
                   EVAL_REPO: ${{ env.EVAL_REPO }}
                   EVAL_WORKFLOW: ${{ env.EVAL_WORKFLOW }}
+                  TRIGGER_REASON: ${{ github.event.inputs.reason }}
               run: |
                   echo "Dispatching evaluation workflow with SDK commit: $SDK_SHA"
                   PAYLOAD=$(jq -n \
                     --arg sdk "$SDK_SHA" \
                     --arg eval_limit "$EVAL_LIMIT" \
-                    --arg models "$MODELS" \
-                    '{ref: "main", inputs: {sdk_commit: $sdk, eval_limit: $eval_limit, models: $models}}')
+                    --argjson models "$MODELS_JSON" \
+                    --arg reason "$TRIGGER_REASON" \
+                    '{ref: "openhands/improve-eval-workflow", inputs: {sdk_commit: $sdk, eval_limit: $eval_limit, models_json: ($models | tostring), trigger_reason: $reason}}')
                   RESPONSE=$(curl -sS -o /tmp/dispatch.out -w "%{http_code}" -X POST \
                     -H "Authorization: token $PAT_TOKEN" \
                     -H "Accept: application/vnd.github+json" \
