@@ -3,7 +3,14 @@ from collections.abc import Sequence
 
 import requests
 from litellm import ChatCompletionToolParam
-from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    PrivateAttr,
+    SecretStr,
+    field_validator,
+)
 from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
 from transformers import AutoTokenizer
 
@@ -77,7 +84,7 @@ class CriticClient(BaseModel):
         default="https://all-hands-ai--critic-qwen3-4b-serve.modal.run",
         description="Base URL of the vLLM classification service",
     )
-    api_key: str = Field(
+    api_key: str | SecretStr = Field(
         ..., description="API key for authenticating with the vLLM service"
     )
     model_name: str = Field(
@@ -145,12 +152,19 @@ class CriticClient(BaseModel):
     # ---------------------
     # Validation
     # ---------------------
-    @field_validator("api_key")
+    @field_validator("api_key", mode="before")
     @classmethod
-    def _non_empty_key(cls, v: str) -> str:
-        if not v.strip():
+    def _validate_and_convert_api_key(cls, v: str | SecretStr) -> SecretStr:
+        """Convert str to SecretStr and validate non-empty."""
+        if isinstance(v, SecretStr):
+            secret_value = v.get_secret_value()
+        else:
+            secret_value = v
+
+        if not secret_value or not secret_value.strip():
             raise ValueError("api_key must be non-empty")
-        return v
+
+        return SecretStr(secret_value) if isinstance(v, str) else v
 
     # ---------------------
     # Label helpers
@@ -235,11 +249,16 @@ class CriticClient(BaseModel):
             reraise=True,  # re-raise the last exception if all retries fail
         )
         def _post_with_retry():
+            api_key_value = (
+                self.api_key.get_secret_value()
+                if isinstance(self.api_key, SecretStr)
+                else self.api_key
+            )
             resp = self._session.post(
                 f"{self.server_url}/classify",
                 headers={
                     "Content-Type": "application/json",
-                    "Authorization": f"Bearer {self.api_key}",
+                    "Authorization": f"Bearer {api_key_value}",
                 },
                 json={"model": self.model_name, "input": formatted},
                 timeout=self.timeout_seconds,
