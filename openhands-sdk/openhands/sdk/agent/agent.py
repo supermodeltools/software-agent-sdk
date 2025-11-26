@@ -172,7 +172,6 @@ class Agent(AgentBase):
                 self.llm,
                 _messages,
                 tools=list(self.tools_map.values()),
-                add_security_risk_prediction=True,
                 on_token=on_token,
             )
         except FunctionCallValidationError as e:

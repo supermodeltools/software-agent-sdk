@@ -183,7 +183,6 @@ def make_llm_completion(
     llm: LLM,
     messages: list[Message],
     tools: list[ToolDefinition] | None = None,
-    add_security_risk_prediction: bool = True,
     on_token: ConversationTokenCallbackType | None = None,
 ) -> LLMResponse:
     """Make an LLM completion call with the provided messages and tools.
@@ -192,7 +191,6 @@ def make_llm_completion(
         llm: The LLM instance to use for completion
         messages: The messages to send to the LLM
         tools: Optional list of tools to provide to the LLM
-        add_security_risk_prediction: Whether to add security risk prediction
         on_token: Optional callback for streaming token updates
 
     Returns:
@@ -204,15 +202,13 @@ def make_llm_completion(
             tools=tools or [],
             include=None,
             store=False,
-            add_security_risk_prediction=add_security_risk_prediction,
-            metadata=llm.metadata,
+            add_security_risk_prediction=True,
             on_token=on_token,
         )
     else:
         return llm.completion(
             messages=messages,
             tools=tools or [],
-            extra_body={"metadata": llm.metadata},
-            add_security_risk_prediction=add_security_risk_prediction,
+            add_security_risk_prediction=True,
             on_token=on_token,
         )
