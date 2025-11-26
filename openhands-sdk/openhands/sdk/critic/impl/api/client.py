@@ -98,7 +98,7 @@ class CriticClient(BaseModel):
         default=True, description="Whether to pass tool definitions to the model"
     )
     timeout_seconds: float = Field(
-        default=60.0, description="Timeout for requests to the model"
+        default=300.0, description="Timeout for requests to the model"
     )
     has_success_label: bool = Field(
         default=True, description="Whether the model predicts success label at index 0"
