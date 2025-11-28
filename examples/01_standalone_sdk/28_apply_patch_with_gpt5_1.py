@@ -42,7 +42,6 @@ assert model.startswith("openai/gpt-5.1"), "Model must be an openai gpt-5.1 vari
 llm = LLM(
     model=model,
     api_key=SecretStr(api_key),
-    native_tool_calling=True,  # enable native tool calling (Responses API)
     reasoning_summary=None,  # avoid OpenAI org verification requirement
     log_completions=True,  # enable telemetry to log input/output payloads
 )
