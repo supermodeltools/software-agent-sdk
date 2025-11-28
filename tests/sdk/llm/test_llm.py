@@ -544,9 +544,9 @@ def test_llm_is_gpt5_family_helper():
     llm_plain = LLM(model="gpt-5-mini", usage_id="test-gpt5-plain")
     assert llm_plain.is_gpt5_family() is True
 
-    # Provider-prefixed GPT-5 model
+    # Provider-prefixed GPT-5 Codex should be excluded from GPT-5 chat family
     llm_prefixed = LLM(model="openai/gpt-5-codex", usage_id="test-gpt5-prefixed")
-    assert llm_prefixed.is_gpt5_family() is True
+    assert llm_prefixed.is_gpt5_family() is False
 
     # Proxy-prefixed GPT-5 model
     llm_proxy = LLM(model="litellm_proxy/openai/gpt-5-mini", usage_id="test-gpt5-proxy")
