@@ -1,11 +1,7 @@
 import copy
-import json
 from collections.abc import Sequence
-from pathlib import Path
 
-import jinja2
 import requests
-from huggingface_hub import hf_hub_download
 from litellm import ChatCompletionToolParam
 from pydantic import (
     BaseModel,
@@ -16,6 +12,7 @@ from pydantic import (
     field_validator,
 )
 from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
+from transformers import AutoTokenizer
 
 
 # ============================================================
@@ -109,7 +106,7 @@ class CriticClient(BaseModel):
 
     # --- runtime fields ---
     _session: requests.Session = PrivateAttr(default_factory=requests.Session)
-    _chat_template: str | None = PrivateAttr(default=None)
+    _tokenizer: object | None = PrivateAttr(default=None)
 
     # --- label space ---
     sentiment_labels: tuple[str, ...] = (
@@ -187,26 +184,10 @@ class CriticClient(BaseModel):
     # ---------------------
     # Tokenizer / formatting
     # ---------------------
-    def _load_chat_template(self) -> str:
-        """Load chat template from tokenizer config using huggingface_hub."""
-        if self._chat_template is None:
-            # Download tokenizer config from HuggingFace Hub
-            config_file = hf_hub_download(
-                repo_id=self.tokenizer_name, filename="tokenizer_config.json"
-            )
-            with Path(config_file).open("r") as f:
-                config = json.load(f)
-
-            if "chat_template" not in config:
-                raise ValueError(
-                    f"No chat_template found in tokenizer config "
-                    f"for {self.tokenizer_name}"
-                )
-
-            chat_template = config["chat_template"]
-            assert isinstance(chat_template, str), "chat_template must be a string"
-            self._chat_template = chat_template
-        return self._chat_template
+    def _get_tokenizer(self):
+        if self._tokenizer is None:
+            self._tokenizer = AutoTokenizer.from_pretrained(self.tokenizer_name)
+        return self._tokenizer
 
     @staticmethod
     def normalize_messages(messages: Sequence[dict]) -> Sequence[dict]:
@@ -231,19 +212,16 @@ class CriticClient(BaseModel):
         messages: Sequence[dict],
         tools: Sequence[ChatCompletionToolParam] | None = None,
     ) -> str:
-        """Apply chat template using Jinja2 (no transformers dependency needed)."""
-        chat_template_str = self._load_chat_template()
+        tok = self._get_tokenizer()
+        assert tok is not None, "Tokenizer could not be loaded"
         msgs = self.normalize_messages(copy.deepcopy(messages))
-
-        # Create Jinja2 environment and render template
-        env = jinja2.Environment()
-        template = env.from_string(chat_template_str)
-
         if self.pass_tools_definitions and tools:
-            return template.render(
-                messages=msgs, tools=list(tools), add_generation_prompt=False
+            return tok.apply_chat_template(  # type: ignore
+                msgs, tools=list(tools), tokenize=False, add_generation_prompt=False
             )
-        return template.render(messages=msgs, add_generation_prompt=False)
+        return tok.apply_chat_template(  # type: ignore
+            msgs, tokenize=False, add_generation_prompt=False
+        )
 
     # ---------------------
     # Inference
