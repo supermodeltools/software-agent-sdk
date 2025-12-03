@@ -165,11 +165,11 @@ class ToolDefinition[ActionT, ObservationT](DiscriminatedUnionMixin, ABC):
                     return [cls(name="finish", ..., executor=FinishExecutor())]
 
         Complex tool with initialization parameters:
-            class TerminalTool(ToolDefinition[ExecuteBashAction,
-                ExecuteBashObservation]):
+            class TerminalTool(ToolDefinition[TerminalAction,
+                TerminalObservation]):
                 @classmethod
                 def create(cls, conv_state, **params):
-                    executor = BashExecutor(
+                    executor = TerminalExecutor(
                         working_dir=conv_state.workspace.working_dir,
                         **params,
                     )
@@ -440,7 +440,24 @@ class ToolDefinition[ActionT, ObservationT](DiscriminatedUnionMixin, ABC):
         for subclass in get_known_concrete_subclasses(cls):
             if subclass.__name__ == kind:
                 return subclass
-        raise ValueError(f"Unknown kind '{kind}' for {cls}")
+
+        # Get all possible kinds for the error message
+        possible_kinds = [
+            subclass.__name__ for subclass in get_known_concrete_subclasses(cls)
+        ]
+        possible_kinds_str = (
+            ", ".join(sorted(possible_kinds)) if possible_kinds else "none"
+        )
+
+        error_msg = (
+            f"Unexpected kind '{kind}' for {cls.__name__}. "
+            f"Expected one of: {possible_kinds_str}. "
+            f"If you receive this error when trying to wrap a DiscriminatedUnion "
+            f"instance inside another pydantic model, you may need to use "
+            f"OpenHandsModel instead of BaseModel to make sure that an invalid "
+            f"schema has not been cached."
+        )
+        raise ValueError(error_msg)
 
 
 def _create_action_type_with_risk(action_type: type[Schema]) -> type[Schema]:

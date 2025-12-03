@@ -23,6 +23,8 @@ class ModelFeatures:
     supports_stop_words: bool
     supports_responses_api: bool
     force_string_serializer: bool
+    send_reasoning_content: bool
+    supports_prompt_cache_retention: bool
 
 
 # Pattern tables capturing current behavior. Keep patterns lowercase.
@@ -41,6 +43,8 @@ REASONING_EFFORT_PATTERNS: list[str] = [
     "gemini-2.5-pro",
     # OpenAI GPT-5 family (includes mini variants)
     "gpt-5",
+    # Anthropic Opus 4.5
+    "claude-opus-4-5",
 ]
 
 EXTENDED_THINKING_PATTERNS: list[str] = [
@@ -53,19 +57,24 @@ EXTENDED_THINKING_PATTERNS: list[str] = [
 
 PROMPT_CACHE_PATTERNS: list[str] = [
     "claude-3-7-sonnet",
-    "claude-3.7-sonnet",
     "claude-sonnet-3-7-latest",
     "claude-3-5-sonnet",
-    "claude-3.5-sonnet",
     "claude-3-5-haiku",
-    "claude-3.5-haiku",
     "claude-3-haiku-20240307",
     "claude-3-opus-20240229",
     "claude-sonnet-4",
     "claude-opus-4",
-    # Anthropic Haiku 4.5 variants (dot and dash)
-    "claude-haiku-4.5",
+    # Anthropic Haiku 4.5 variants (dash only; official IDs use hyphens)
     "claude-haiku-4-5",
+    "claude-opus-4-5",
+]
+
+# Models that support a top-level prompt_cache_retention parameter
+PROMPT_CACHE_RETENTION_PATTERNS: list[str] = [
+    # OpenAI GPT-5+ family
+    "gpt-5",
+    # GPT-4.1 too
+    "gpt-4.1",
 ]
 
 SUPPORTS_STOP_WORDS_FALSE_PATTERNS: list[str] = [
@@ -99,6 +108,12 @@ FORCE_STRING_SERIALIZER_PATTERNS: list[str] = [
     "groq/kimi-k2-instruct",  # explicit provider-prefixed IDs
 ]
 
+# Models that we should send full reasoning content
+# in the message input
+SEND_REASONING_CONTENT_PATTERNS: list[str] = [
+    "kimi-k2-thinking",
+]
+
 
 def get_features(model: str) -> ModelFeatures:
     """Get model features."""
@@ -111,4 +126,26 @@ def get_features(model: str) -> ModelFeatures:
         ),
         supports_responses_api=model_matches(model, RESPONSES_API_PATTERNS),
         force_string_serializer=model_matches(model, FORCE_STRING_SERIALIZER_PATTERNS),
+        send_reasoning_content=model_matches(model, SEND_REASONING_CONTENT_PATTERNS),
+        supports_prompt_cache_retention=model_matches(
+            model, PROMPT_CACHE_RETENTION_PATTERNS
+        ),
     )
+
+
+# Default temperature mapping.
+# Each entry: (pattern, default_temperature)
+DEFAULT_TEMPERATURE_PATTERNS: list[tuple[str, float]] = [
+    ("kimi-k2-thinking", 1.0),
+]
+
+
+def get_default_temperature(model: str) -> float:
+    """Return the default temperature for a given model pattern.
+
+    Uses case-insensitive substring matching via model_matches.
+    """
+    for pattern, value in DEFAULT_TEMPERATURE_PATTERNS:
+        if model_matches(model, [pattern]):
+            return value
+    return 0.0
