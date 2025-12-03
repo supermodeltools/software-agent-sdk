@@ -2,7 +2,7 @@
 Demonstrate explicit `/condense` command and skill-triggered condensation.
 
 This example uses Gemini 2.5 Pro for both the agent and the condenser. Set
-GEMINI_API_KEY in your environment. The model id is `gemini-2.5-pro`.
+GEMINI_API_KEY in your environment. The model id is `gemini/gemini-2.5-pro`.
 
 Usage:
   GEMINI_API_KEY=... uv run python examples/01_standalone_sdk/15_condense_command.py
@@ -32,7 +32,9 @@ logger = get_logger(__name__)
 def make_llm(usage_id: str) -> LLM:
     api_key = os.getenv("GEMINI_API_KEY")
     assert api_key, "Set GEMINI_API_KEY"
-    return LLM(model="gemini-2.5-pro", api_key=SecretStr(api_key), usage_id=usage_id)
+    return LLM(
+        model="gemini/gemini-2.5-pro", api_key=SecretStr(api_key), usage_id=usage_id
+    )
 
 
 def main():
