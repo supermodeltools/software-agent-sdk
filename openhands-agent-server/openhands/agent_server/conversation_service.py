@@ -373,6 +373,36 @@ class ConversationService:
                         "cipher": self.cipher,
                     },
                 )
+                # Dynamically register tools when resuming persisted conversations
+                if stored.tool_module_qualnames:
+                    import importlib
+
+                    for (
+                        tool_name,
+                        module_qualname,
+                    ) in stored.tool_module_qualnames.items():
+                        try:
+                            # Import the module to trigger tool auto-registration
+                            importlib.import_module(module_qualname)
+                            logger.debug(
+                                f"Tool '{tool_name}' registered via module "
+                                f"'{module_qualname}' when resuming conversation "
+                                f"{stored.id}"
+                            )
+                        except ImportError as e:
+                            logger.warning(
+                                f"Failed to import module '{module_qualname}' for "
+                                f"tool '{tool_name}' when resuming conversation "
+                                f"{stored.id}: {e}. Tool will not be available."
+                            )
+                            # Continue even if some tools fail to register
+                    if stored.tool_module_qualnames:
+                        logger.info(
+                            f"Dynamically registered "
+                            f"{len(stored.tool_module_qualnames)} tools when "
+                            f"resuming conversation {stored.id}: "
+                            f"{list(stored.tool_module_qualnames.keys())}"
+                        )
                 await self._start_event_service(stored)
             except Exception:
                 logger.exception(
