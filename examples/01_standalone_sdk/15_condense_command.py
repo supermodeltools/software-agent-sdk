@@ -65,6 +65,17 @@ def main():
     convo.send_message("Start the conversation with some context.")
     convo.run()
 
+    # Add a couple more turns to build up some context
+    convo.send_message(
+        "Tell me a very short, two-sentence story about a friendly robot and a cat."
+    )
+    convo.run()
+
+    convo.send_message(
+        "Great, now expand that story to five sentences and add an unexpected twist."
+    )
+    convo.run()
+
     # Now request condensation explicitly
     print("Requesting condensation via /condense...")
     convo.send_message("/condense")
