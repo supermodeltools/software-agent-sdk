@@ -7,7 +7,7 @@ in real-time. The critic scores are displayed in the conversation visualizer.
 import os
 
 from openhands.sdk import LLM, Agent, Conversation, Tool
-from openhands.sdk.critic import AgentFinishedCritic
+from openhands.sdk.critic import APIBasedCritic
 from openhands.tools.file_editor import FileEditorTool
 from openhands.tools.task_tracker import TaskTrackerTool
 from openhands.tools.terminal import TerminalTool
@@ -19,6 +19,15 @@ llm = LLM(
     base_url=os.getenv("LLM_BASE_URL", None),
 )
 
+critic = APIBasedCritic(
+    server_url=os.getenv("CRITIC_SERVER_URL", ""),
+    api_key=os.getenv("CRITIC_API_KEY", ""),
+    model_name=os.getenv("CRITIC_MODEL_NAME", ""),
+    pass_tools_definitions=True,
+    has_success_label=True,
+)
+
+
 # Configure agent with critic
 agent = Agent(
     llm=llm,
@@ -28,7 +37,7 @@ agent = Agent(
         Tool(name=TaskTrackerTool.name),
     ],
     # Add critic to evaluate agent actions
-    critic=AgentFinishedCritic(),
+    critic=critic,
     # finish_and_message: evaluate on FinishAction and agent MessageEvent (default)
     critic_evaluation_mode="finish_and_message",
 )
