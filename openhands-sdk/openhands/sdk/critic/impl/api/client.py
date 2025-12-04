@@ -1,5 +1,6 @@
 import copy
 from collections.abc import Sequence
+from typing import Any, cast
 
 import requests
 from litellm import ChatCompletionToolParam
@@ -12,7 +13,8 @@ from pydantic import (
     field_validator,
 )
 from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
-from transformers import AutoTokenizer
+
+from .chat_template import ChatTemplateRenderer
 
 
 # ============================================================
@@ -92,7 +94,7 @@ class CriticClient(BaseModel):
     )
     tokenizer_name: str = Field(
         default="Qwen/Qwen3-4B-Instruct-2507",
-        description="Name of the tokenizer to use",
+        description="HuggingFace tokenizer name for loading chat template",
     )
     pass_tools_definitions: bool = Field(
         default=True, description="Whether to pass tool definitions to the model"
@@ -106,7 +108,7 @@ class CriticClient(BaseModel):
 
     # --- runtime fields ---
     _session: requests.Session = PrivateAttr(default_factory=requests.Session)
-    _tokenizer: object | None = PrivateAttr(default=None)
+    _template_renderer: ChatTemplateRenderer | None = PrivateAttr(default=None)
 
     # --- label space ---
     sentiment_labels: tuple[str, ...] = (
@@ -184,10 +186,13 @@ class CriticClient(BaseModel):
     # ---------------------
     # Tokenizer / formatting
     # ---------------------
-    def _get_tokenizer(self):
-        if self._tokenizer is None:
-            self._tokenizer = AutoTokenizer.from_pretrained(self.tokenizer_name)
-        return self._tokenizer
+    def _get_template_renderer(self) -> ChatTemplateRenderer:
+        """Lazily initialize the chat template renderer."""
+        if self._template_renderer is None:
+            self._template_renderer = ChatTemplateRenderer(
+                tokenizer_name=self.tokenizer_name
+            )
+        return self._template_renderer
 
     @staticmethod
     def normalize_messages(messages: Sequence[dict]) -> Sequence[dict]:
@@ -212,16 +217,18 @@ class CriticClient(BaseModel):
         messages: Sequence[dict],
         tools: Sequence[ChatCompletionToolParam] | None = None,
     ) -> str:
-        tok = self._get_tokenizer()
-        assert tok is not None, "Tokenizer could not be loaded"
+        renderer = self._get_template_renderer()
         msgs = self.normalize_messages(copy.deepcopy(messages))
-        if self.pass_tools_definitions and tools:
-            return tok.apply_chat_template(  # type: ignore
-                msgs, tools=list(tools), tokenize=False, add_generation_prompt=False
-            )
-        return tok.apply_chat_template(  # type: ignore
-            msgs, tokenize=False, add_generation_prompt=False
+        # Cast tools to Sequence[dict[str, Any]] for type compatibility
+        # ChatCompletionToolParam is a TypedDict which is structurally compatible
+        tools_dicts: Sequence[dict[str, Any]] | None = (
+            cast(Sequence[dict[str, Any]], tools) if tools is not None else None
         )
+        if self.pass_tools_definitions and tools_dicts:
+            return renderer.apply_chat_template(
+                msgs, tools=tools_dicts, add_generation_prompt=False
+            )
+        return renderer.apply_chat_template(msgs, add_generation_prompt=False)
 
     # ---------------------
     # Inference
