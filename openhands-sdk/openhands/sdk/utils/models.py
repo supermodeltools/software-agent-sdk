@@ -53,7 +53,8 @@ def rebuild_all():
         import sys
 
         if "openhands.sdk.critic.base" in sys.modules:
-            from openhands.sdk.critic.base import CriticBase, CriticResult
+            from openhands.sdk.critic.base import CriticBase
+            from openhands.sdk.critic.result import CriticResult
 
             types_namespace["CriticBase"] = CriticBase
             types_namespace["CriticResult"] = CriticResult

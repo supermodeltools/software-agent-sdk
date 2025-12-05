@@ -1,12 +1,11 @@
-from __future__ import annotations
-
 import copy
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, ClassVar
+from typing import ClassVar
 
 from pydantic import ConfigDict, Field
 from rich.text import Text
 
+from openhands.sdk.critic.result import CriticResult
 from openhands.sdk.event.base import N_CHAR_PREVIEW, EventID, LLMConvertibleEvent
 from openhands.sdk.event.types import SourceType
 from openhands.sdk.llm import (
@@ -17,10 +16,6 @@ from openhands.sdk.llm import (
     ThinkingBlock,
     content_to_str,
 )
-
-
-if TYPE_CHECKING:
-    from openhands.sdk.critic.base import CriticResult
 
 
 class MessageEvent(LLMConvertibleEvent):
