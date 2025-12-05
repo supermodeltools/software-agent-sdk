@@ -30,13 +30,13 @@ class CriticResult(BaseModel):
 
         # Display main score
         score_style = "green" if self.success else "yellow"
-        content.append(f"  Overall: {self.score:.4f}\n", style=score_style)
+        content.append(f"  Success: {self.score:.4f}\n", style=score_style)
 
         # Parse and display detailed probabilities if available in message
         if self.message:
             try:
-                # Try to parse as JSON
-                probs_dict = json.loads(self.message)
+                probs_dict = json.loads(self.message[self.message.find("{") :])
+                probs_dict.pop("success", None)  # Remove overall success if present
                 if isinstance(probs_dict, dict):
                     # Sort by probability (descending)
                     sorted_probs = sorted(
