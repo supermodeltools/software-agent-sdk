@@ -113,11 +113,7 @@ class ActionEvent(LLMConvertibleEvent):
 
         # Display critic result if available
         if self.critic_result is not None:
-            content.append("\nCritic Score: ", style="bold")
-            score_style = "green" if self.critic_result.success else "yellow"
-            content.append(f"{self.critic_result.score:.3f}", style=score_style)
-            if self.critic_result.message:
-                content.append(f" - {self.critic_result.message}")
+            content.append(self.critic_result.visualize)
 
         return content
 
