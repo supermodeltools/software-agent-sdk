@@ -47,24 +47,10 @@ def rebuild_all():
     global _rebuild_required
     _rebuild_required = False
 
-    # Provide critic types to namespace if available to resolve forward references
-    types_namespace = {}
-    try:
-        import sys
-
-        if "openhands.sdk.critic.base" in sys.modules:
-            from openhands.sdk.critic.base import CriticBase
-            from openhands.sdk.critic.result import CriticResult
-
-            types_namespace["CriticBase"] = CriticBase
-            types_namespace["CriticResult"] = CriticResult
-    except ImportError:
-        pass
-
     for cls in _get_all_subclasses(OpenHandsModel):
-        cls.model_rebuild(force=True, _types_namespace=types_namespace)
+        cls.model_rebuild(force=True)
     for cls in _get_all_subclasses(DiscriminatedUnionMixin):
-        cls.model_rebuild(force=True, _types_namespace=types_namespace)
+        cls.model_rebuild(force=True)
 
 
 def kind_of(obj) -> str:
