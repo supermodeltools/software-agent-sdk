@@ -1,7 +1,8 @@
 import os
 import shutil
 
-from openhands.sdk.io.memory import InMemoryFileStore
+from cachetools import LRUCache
+
 from openhands.sdk.logger import get_logger
 from openhands.sdk.observability.laminar import observe
 
@@ -13,15 +14,15 @@ logger = get_logger(__name__)
 
 class LocalFileStore(FileStore):
     root: str
-    cache: InMemoryFileStore
+    cache: LRUCache
 
-    def __init__(self, root: str):
+    def __init__(self, root: str, cache_size: int = 100) -> None:
         if root.startswith("~"):
             root = os.path.expanduser(root)
         root = os.path.abspath(os.path.normpath(root))
         self.root = root
         os.makedirs(self.root, exist_ok=True)
-        self.cache = InMemoryFileStore()
+        self.cache = LRUCache(maxsize=cache_size)
 
     def get_full_path(self, path: str) -> str:
         # strip leading slash to keep relative under root
@@ -48,22 +49,32 @@ class LocalFileStore(FileStore):
         else:
             with open(full_path, "wb") as f:
                 f.write(contents)
+        cache_content = (
+            contents.decode("utf-8", errors="replace")
+            if isinstance(contents, bytes)
+            else contents
+        )
 
-        self.cache.write(full_path, contents)
+        self.cache[full_path] = cache_content
 
     def read(self, path: str) -> str:
         full_path = self.get_full_path(path)
 
-        if full_path in self.cache.files:
-            return self.cache.read(full_path)
+        if full_path in self.cache:
+            return self.cache[full_path]
 
         if not os.path.exists(full_path):
             raise FileNotFoundError(path)
         result: str
-        with open(full_path, encoding="utf-8") as f:
-            result = f.read()
+        try:
+            with open(full_path, encoding="utf-8") as f:
+                result = f.read()
+        except UnicodeDecodeError:
+            logger.debug(f"File {full_path} is binary, reading as bytes")
+            with open(full_path, "rb") as f:
+                result = f.read().decode("utf-8", errors="replace")
 
-        self.cache.write(full_path, result)
+        self.cache[full_path] = result
         return result
 
     @observe(name="LocalFileStore.list", span_type="TOOL")
@@ -101,4 +112,13 @@ class LocalFileStore(FileStore):
             logger.error(f"Error clearing local file store: {str(e)}")
         finally:
             if has_exist and full_path is not None:
-                self.cache.delete(full_path)
+                self._cache_delete(full_path)
+
+    def _cache_delete(self, path: str) -> None:
+        try:
+            keys_to_delete = [key for key in self.cache.keys() if key.startswith(path)]
+            for key in keys_to_delete:
+                del self.cache[key]
+            logger.debug(f"Cleared LRU cache: {path}")
+        except Exception as e:
+            logger.error(f"Error clearing LRU cache: {str(e)}")
