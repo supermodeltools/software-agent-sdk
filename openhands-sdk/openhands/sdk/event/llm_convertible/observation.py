@@ -48,6 +48,8 @@ class ObservationEvent(ObservationBaseEvent):
             content=self.observation.to_llm_content,
             name=self.tool_name,
             tool_call_id=self.tool_call_id,
+            # Force string serializer for maximum provider compatibility (e.g., Anthropic)
+            force_string_serializer=True,
         )
 
     def __str__(self) -> str:
@@ -89,6 +91,8 @@ class UserRejectObservation(ObservationBaseEvent):
             content=[TextContent(text=f"Action rejected: {self.rejection_reason}")],
             name=self.tool_name,
             tool_call_id=self.tool_call_id,
+            # Force string serializer to avoid provider-specific structured content issues
+            force_string_serializer=True,
         )
 
     def __str__(self) -> str:
