@@ -318,8 +318,8 @@ class LocalConversation(BaseConversation):
                         else:
                             break
 
-                    # Clear the new-user-message flag just before stepping; any
-                    # message arriving during this step will set it again.
+                    # Clear the new-user-message flag just before stepping;
+                    # any message arriving during this step will set it again.
                     self._state._new_user_message = False
                     # Pause attempts to acquire the state lock
                     # Before value can be modified step can be taken
