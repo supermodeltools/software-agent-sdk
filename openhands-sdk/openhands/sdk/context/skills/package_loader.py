@@ -3,8 +3,12 @@
 This module provides functionality to discover and load skills from
 installed Python packages that register as OpenHands skill packages
 via entry points.
+
+Supports both manifest.json (Claude Code-aligned) and skill-package.yaml
+(legacy) descriptor formats.
 """
 
+import json
 import sys
 from importlib.metadata import entry_points
 from importlib.resources import files
@@ -20,6 +24,30 @@ from openhands.sdk.logger import get_logger
 logger = get_logger(__name__)
 
 
+def _load_descriptor(package_module) -> dict[str, Any]:
+    """Load package descriptor, trying manifest.json first, then skill-package.yaml.
+    
+    Args:
+        package_module: The loaded package module
+        
+    Returns:
+        Parsed descriptor dictionary
+        
+    Raises:
+        FileNotFoundError: If neither descriptor file is found
+    """
+    # Try manifest.json first (new Claude Code-aligned format)
+    try:
+        json_content = files(package_module).joinpath("manifest.json").read_text()
+        return json.loads(json_content)
+    except (FileNotFoundError, json.JSONDecodeError):
+        pass
+    
+    # Fall back to skill-package.yaml (legacy format)
+    yaml_content = files(package_module).joinpath("skill-package.yaml").read_text()
+    return yaml.safe_load(yaml_content)
+
+
 def list_skill_packages() -> list[dict[str, Any]]:
     """Discover all installed OpenHands skill packages.
 
@@ -29,12 +57,14 @@ def list_skill_packages() -> list[dict[str, Any]]:
 
     Returns:
         List of dicts with 'name' (str) and 'descriptor' (dict) keys.
-        The descriptor contains the parsed skill-package.yaml content.
+        The descriptor contains the parsed manifest.json or skill-package.yaml content.
 
     Example:
         >>> packages = list_skill_packages()
         >>> for pkg in packages:
-        ...     print(f"{pkg['name']}: {pkg['descriptor']['metadata']['displayName']}")
+        ...     # Handle both old YAML format (nested) and new JSON format (flat)
+        ...     metadata = pkg['descriptor'].get('metadata', pkg['descriptor'])
+        ...     print(f"{pkg['name']}: {metadata.get('displayName', 'Unknown')}")
     """
     eps = entry_points(group="openhands.skill_packages")
 
@@ -45,9 +75,8 @@ def list_skill_packages() -> list[dict[str, Any]]:
             # Load the package module
             package_module = ep.load()
 
-            # Load the YAML descriptor from the package
-            yaml_content = files(package_module).joinpath("skill-package.yaml").read_text()
-            descriptor = yaml.safe_load(yaml_content)
+            # Load descriptor (tries manifest.json first, falls back to YAML)
+            descriptor = _load_descriptor(package_module)
 
             packages.append({"name": ep.name, "descriptor": descriptor, "module": package_module})
         except Exception as e:
@@ -69,7 +98,9 @@ def get_skill_package(package_name: str) -> dict[str, Any] | None:
     Example:
         >>> pkg = get_skill_package('simple-code-review')
         >>> if pkg:
-        ...     print(pkg['descriptor']['metadata']['displayName'])
+        ...     # Handle both formats
+        ...     metadata = pkg['descriptor'].get('metadata', pkg['descriptor'])
+        ...     print(metadata.get('displayName', 'Unknown'))
     """
     eps = entry_points(group="openhands.skill_packages")
 
@@ -79,9 +110,8 @@ def get_skill_package(package_name: str) -> dict[str, Any] | None:
                 # Load the package module
                 package_module = ep.load()
 
-                # Load the YAML descriptor from the package
-                yaml_content = files(package_module).joinpath("skill-package.yaml").read_text()
-                descriptor = yaml.safe_load(yaml_content)
+                # Load descriptor (tries manifest.json first, falls back to YAML)
+                descriptor = _load_descriptor(package_module)
 
                 return {"name": ep.name, "descriptor": descriptor, "module": package_module}
             except Exception as e:
@@ -121,7 +151,13 @@ def load_skills_from_package(package_name: str) -> tuple[dict[str, Skill], dict[
     knowledge_skills = {}
 
     # Load skills defined in the descriptor
-    skills_spec = descriptor.get("spec", {}).get("skills", [])
+    # Handle both formats: YAML has nested structure (spec.skills), JSON has flat structure (skills)
+    if "spec" in descriptor:
+        # Old YAML format: skills are in spec.skills
+        skills_spec = descriptor.get("spec", {}).get("skills", [])
+    else:
+        # New JSON format: skills are at top level
+        skills_spec = descriptor.get("skills", [])
 
     logger.debug(f"Loading {len(skills_spec)} skills from package '{package_name}'")
 
