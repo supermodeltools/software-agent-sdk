@@ -180,6 +180,41 @@ class View(BaseModel):
             return True
 
     @staticmethod
+    def normalize_thinking_blocks(
+        events: list[LLMConvertibleEvent],
+    ) -> list[LLMConvertibleEvent]:
+        """Normalize thinking blocks across all ActionEvents.
+
+        If ANY ActionEvent lacks thinking blocks, strip thinking blocks from ALL
+        ActionEvents to maintain consistency. This prevents Claude API errors that
+        occur when thinking is enabled (detected by presence of thinking blocks in
+        some messages) but not all assistant messages start with thinking blocks.
+        """
+        # Check if there are any ActionEvents without thinking blocks
+        action_events = [e for e in events if isinstance(e, ActionEvent)]
+        if not action_events:
+            return events
+
+        # If any action lacks thinking blocks, strip from all
+        any_action_without_thinking = any(
+            len(action.thinking_blocks) == 0 for action in action_events
+        )
+
+        if not any_action_without_thinking:
+            # All actions have thinking blocks, no normalization needed
+            return events
+
+        # Strip thinking blocks from all ActionEvents
+        normalized_events = []
+        for event in events:
+            if isinstance(event, ActionEvent) and len(event.thinking_blocks) > 0:
+                # Create a copy with thinking blocks removed
+                event = event.model_copy(update={"thinking_blocks": []})
+            normalized_events.append(event)
+
+        return normalized_events
+
+    @staticmethod
     def from_events(events: Sequence[Event]) -> "View":
         """Create a view from a list of events, respecting the semantics of any
         condensation events.
@@ -236,8 +271,11 @@ class View(BaseModel):
                 unhandled_condensation_request = True
                 break
 
+        filtered_events = View.filter_unmatched_tool_calls(kept_events)
+        normalized_events = View.normalize_thinking_blocks(filtered_events)
+
         return View(
-            events=View.filter_unmatched_tool_calls(kept_events),
+            events=normalized_events,
             unhandled_condensation_request=unhandled_condensation_request,
             condensations=condensations,
         )
