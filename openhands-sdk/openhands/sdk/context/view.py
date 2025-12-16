@@ -123,6 +123,135 @@ class View(BaseModel):
         return updated_forgotten_ids
 
     @staticmethod
+    def _ensure_thinking_block_preservation(
+        events: Sequence[Event],
+        forgotten_event_ids: set[EventID],
+    ) -> set[EventID]:
+        """Ensure that at least one ActionEvent with thinking blocks is kept.
+
+        When Claude's extended thinking mode is enabled, the conversation must
+        have at least one assistant message with thinking blocks. This method
+        ensures that if all kept events would lack thinking blocks, we preserve
+        at least one event with thinking blocks.
+
+        This is only applied when there are kept ActionEvents - if all ActionEvents
+        are forgotten, then there's no need to preserve thinking blocks.
+
+        Args:
+            events: All events in the conversation
+            forgotten_event_ids: Set of event IDs to be forgotten
+
+        Returns:
+            Updated set of forgotten event IDs (with some removed to keep thinking
+            blocks)
+        """
+        # First check if there are any kept ActionEvents
+        kept_action_events = [
+            e
+            for e in events
+            if isinstance(e, ActionEvent) and e.id not in forgotten_event_ids
+        ]
+
+        if not kept_action_events:
+            # No kept ActionEvents - no need to preserve thinking blocks
+            logger.debug("No kept ActionEvents - skipping thinking block preservation")
+            return forgotten_event_ids
+
+        # Find all ActionEvents with thinking blocks
+        events_with_thinking: list[tuple[int, ActionEvent]] = []
+        for idx, event in enumerate(events):
+            if (
+                isinstance(event, ActionEvent)
+                and event.thinking_blocks
+                and len(event.thinking_blocks) > 0
+            ):
+                events_with_thinking.append((idx, event))
+
+        if not events_with_thinking:
+            # No thinking blocks in the conversation at all
+            logger.debug("No events with thinking blocks found")
+            return forgotten_event_ids
+
+        logger.debug(
+            f"Found {len(events_with_thinking)} events with thinking blocks: "
+            f"{[e.id for _, e in events_with_thinking]}"
+        )
+
+        # Check if any kept events have thinking blocks
+        has_kept_thinking_blocks = any(
+            event.id not in forgotten_event_ids for _, event in events_with_thinking
+        )
+
+        if has_kept_thinking_blocks:
+            # At least one event with thinking blocks is already kept
+            logger.debug("At least one event with thinking blocks is already kept")
+            return forgotten_event_ids
+
+        logger.debug(
+            "No kept events have thinking blocks - need to preserve at least one"
+        )
+
+        # No kept events have thinking blocks - we need to preserve at least one
+        # Find the most recent event with thinking blocks that's being forgotten
+        forgotten_with_thinking = [
+            (idx, event)
+            for idx, event in events_with_thinking
+            if event.id in forgotten_event_ids
+        ]
+
+        if not forgotten_with_thinking:
+            # This shouldn't happen (we checked there are thinking blocks above)
+            logger.debug(
+                "No forgotten events with thinking blocks (this should not happen)"
+            )
+            return forgotten_event_ids
+
+        # Keep the most recent event with thinking blocks
+        # Also keep its entire batch (all events with same llm_response_id)
+        _, event_to_keep = forgotten_with_thinking[-1]
+        logger.debug(
+            f"Preserving event {event_to_keep.id} with thinking blocks "
+            f"(llm_response_id={event_to_keep.llm_response_id})"
+        )
+
+        # Find all events in the same batch AND their tool result observations
+        batch_event_ids = []
+        for e in events:
+            if isinstance(e, ActionEvent) and (
+                e.llm_response_id == event_to_keep.llm_response_id
+            ):
+                batch_event_ids.append(e.id)
+
+        # Also find observations that match the tool_call_ids in this batch
+        tool_call_ids_in_batch = [
+            e.tool_call_id
+            for e in events
+            if isinstance(e, ActionEvent)
+            and e.llm_response_id == event_to_keep.llm_response_id
+            and e.tool_call_id is not None
+        ]
+
+        for e in events:
+            from openhands.sdk.event.llm_convertible import ObservationBaseEvent
+
+            if (
+                isinstance(e, ObservationBaseEvent)
+                and e.tool_call_id in tool_call_ids_in_batch
+            ):
+                batch_event_ids.append(e.id)
+
+        updated_forgotten_ids = set(forgotten_event_ids)
+        for event_id in batch_event_ids:
+            if event_id in updated_forgotten_ids:
+                updated_forgotten_ids.remove(event_id)
+                logger.debug(
+                    f"Removing {event_id} from forgotten set to preserve "
+                    f"thinking blocks"
+                )
+
+        return updated_forgotten_ids
+
+    @staticmethod
     def filter_unmatched_tool_calls(
         events: list[LLMConvertibleEvent],
     ) -> list[LLMConvertibleEvent]:
@@ -199,6 +328,12 @@ class View(BaseModel):
         # forget all events in that batch to prevent partial batches with thinking
         # blocks separated from their tool calls
         forgotten_event_ids = View._enforce_batch_atomicity(events, forgotten_event_ids)
+
+        # Ensure at least one event with thinking blocks is preserved
+        # This is required for Claude's extended thinking mode
+        forgotten_event_ids = View._ensure_thinking_block_preservation(
+            events, forgotten_event_ids
+        )
 
         kept_events = [
             event

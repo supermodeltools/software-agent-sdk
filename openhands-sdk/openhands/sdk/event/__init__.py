@@ -4,6 +4,7 @@ from openhands.sdk.event.condenser import (
     CondensationRequest,
     CondensationSummaryEvent,
 )
+from openhands.sdk.event.conversation_error import ConversationErrorEvent
 from openhands.sdk.event.conversation_state import ConversationStateUpdateEvent
 from openhands.sdk.event.llm_completion_log import LLMCompletionLogEvent
 from openhands.sdk.event.llm_convertible import (
@@ -35,6 +36,7 @@ __all__ = [
     "Condensation",
     "CondensationRequest",
     "CondensationSummaryEvent",
+    "ConversationErrorEvent",
     "ConversationStateUpdateEvent",
     "LLMCompletionLogEvent",
     "EventID",
