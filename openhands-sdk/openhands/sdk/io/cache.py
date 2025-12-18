@@ -1,3 +1,4 @@
+import sys
 from typing import Any
 
 from cachetools import LRUCache
@@ -17,8 +18,8 @@ class MemoryLRUCache(LRUCache):
 
     When either limit is exceeded, the least recently used items are evicted.
 
-    Note: Memory tracking is based on string length for simplicity and accuracy.
-    For non-string values, sys.getsizeof is used as a rough approximation.
+    Note: Memory tracking uses sys.getsizeof which gives the shallow size of objects.
+    For nested structures, this won't account for the size of contained objects.
     """
 
     def __init__(self, max_memory: int, maxsize: int, *args, **kwargs):
@@ -29,28 +30,8 @@ class MemoryLRUCache(LRUCache):
         self.current_memory = 0
 
     def _get_size(self, value: Any) -> int:
-        """Calculate size of value for memory tracking.
-
-        For strings (the common case in FileStore), we use len() which gives
-        accurate character count. For other types, we use sys.getsizeof() as
-        a rough approximation.
-        """
-        if isinstance(value, str):
-            # For strings, len() gives character count which is what we care about
-            # This is much more accurate than sys.getsizeof for our use case
-            return len(value)
-        elif isinstance(value, bytes):
-            return len(value)
-        else:
-            # For other types, fall back to sys.getsizeof
-            # This is mainly for edge cases and won't be accurate for nested
-            # structures, but it's better than nothing
-            try:
-                import sys
-
-                return sys.getsizeof(value)
-            except Exception:
-                return 0
+        """Calculate size of value for memory tracking using sys.getsizeof."""
+        return sys.getsizeof(value)
 
     def __setitem__(self, key: Any, value: Any) -> None:
         new_size = self._get_size(value)
