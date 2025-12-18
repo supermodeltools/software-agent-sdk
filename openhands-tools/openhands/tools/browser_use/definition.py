@@ -1,11 +1,15 @@
 """Browser-use tool implementation for web automation."""
 
+import base64
+import hashlib
 from collections.abc import Sequence
+from pathlib import Path
 from typing import TYPE_CHECKING, Literal, Self
 
 from pydantic import Field
 
 from openhands.sdk.llm import ImageContent, TextContent
+from openhands.sdk.logger import get_logger
 from openhands.sdk.tool import (
     Action,
     Observation,
@@ -57,6 +61,30 @@ class BrowserObservation(Observation):
         description="Directory where full output files are saved",
     )
 
+    def _save_screenshot(self, base64_data: str, save_dir: str) -> str | None:
+        try:
+            save_dir_path = Path(save_dir)
+            save_dir_path.mkdir(parents=True, exist_ok=True)
+
+            mime_type = detect_image_mime_type(base64_data)
+            ext = mime_type.split("/")[-1]
+            if ext == "jpeg":
+                ext = "jpg"
+
+            # Generate hash for filename
+            content_hash = hashlib.sha256(base64_data.encode("utf-8")).hexdigest()[:8]
+            filename = f"browser_screenshot_{content_hash}.{ext}"
+            file_path = save_dir_path / filename
+
+            if not file_path.exists():
+                image_data = base64.b64decode(base64_data)
+                file_path.write_bytes(image_data)
+
+            return str(file_path)
+        except Exception as e:
+            logger.debug(f"Failed to save screenshot to {save_dir}: {e}")
+            return None
+
     @property
     def to_llm_content(self) -> Sequence[TextContent | ImageContent]:
         llm_content: list[TextContent | ImageContent] = []
@@ -81,6 +109,17 @@ class BrowserObservation(Observation):
 
         if self.screenshot_data:
             mime_type = detect_image_mime_type(self.screenshot_data)
+
+            # Save screenshot if directory is available
+            if self.full_output_save_dir:
+                saved_path = self._save_screenshot(
+                    self.screenshot_data, self.full_output_save_dir
+                )
+                if saved_path:
+                    llm_content.append(
+                        TextContent(text=f"Screenshot saved to: {saved_path}")
+                    )
+
             # Convert base64 to data URL format for ImageContent
             data_url = f"data:{mime_type};base64,{self.screenshot_data}"
             llm_content.append(ImageContent(image_urls=[data_url]))
