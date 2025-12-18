@@ -11,6 +11,7 @@ from tests.integration.base import TestResult
 from tests.integration.behavior_utils import (
     get_conversation_summary,
 )
+from tests.integration.early_stopper import EarlyStopperBase, TestExecutionPruner
 from tests.integration.utils.behavior_helpers import (
     SoftwareAgentSDKBehaviorTest,
     append_environment_tips,
@@ -32,6 +33,21 @@ class NoOververificationTest(SoftwareAgentSDKBehaviorTest):
     """Ensure the agent updates truncation limit with scoped verification."""
 
     INSTRUCTION: str = INSTRUCTION
+
+    def get_early_stopper(self) -> EarlyStopperBase:
+        """Stop early if agent runs overly broad tests.
+
+        Detects patterns like 'pytest tests/' or 'pytest .' which indicate
+        running tests much broader than the targeted terminal tests.
+        """
+        return TestExecutionPruner(
+            max_test_commands=3,
+            broad_test_patterns=[
+                "pytest tests/",  # Too broad - should target terminal tests
+                "pytest .",  # Running all tests
+                "python -m pytest .",  # Running all tests
+            ],
+        )
 
     def verify_result(self) -> TestResult:
         conversation_summary = get_conversation_summary(self.collected_events)
