@@ -168,3 +168,42 @@ def test_image_source_validation():
                 server_image="test:latest",
                 host_port=8000,
             )
+
+
+def test_start_container_uses_cleanenv(mock_apptainer_workspace):
+    """Test that _start_container uses --cleanenv to isolate from host environment."""
+    from openhands.workspace import ApptainerWorkspace
+
+    workspace, _ = mock_apptainer_workspace()
+    workspace._sif_path = "/tmp/test.sif"
+    workspace.host_port = 8000
+
+    with patch("subprocess.Popen") as mock_popen:
+        mock_popen.return_value = MagicMock()
+        workspace._start_container()
+
+        # Verify Popen was called
+        assert mock_popen.called
+
+        # Get the command that was passed to Popen
+        call_args = mock_popen.call_args
+        cmd = call_args[0][0]  # First positional argument is the command list
+
+        # Verify --cleanenv is in the command
+        assert "--cleanenv" in cmd, "Container should use --cleanenv to isolate environment"
+
+        # Verify PATH is explicitly set to container-internal paths
+        path_env_found = False
+        for i, arg in enumerate(cmd):
+            if arg == "--env" and i + 1 < len(cmd):
+                next_arg = cmd[i + 1]
+                if next_arg.startswith("PATH="):
+                    path_env_found = True
+                    # Verify it doesn't contain any host paths (no /home, no anaconda, etc.)
+                    path_value = next_arg.split("=", 1)[1]
+                    assert "/home" not in path_value, "PATH should not contain host paths"
+                    assert "anaconda" not in path_value.lower(), "PATH should not contain anaconda"
+                    # Verify it contains standard container paths
+                    assert "/usr/local/bin" in path_value or "/usr/bin" in path_value
+
+        assert path_env_found, "PATH environment variable should be explicitly set"

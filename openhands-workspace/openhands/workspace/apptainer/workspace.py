@@ -255,8 +255,16 @@ class ApptainerWorkspace(RemoteWorkspace):
 
     def _start_container(self) -> None:
         """Start the Apptainer container instance."""
-        # Prepare environment variables
-        env_args: list[str] = []
+        # Use --cleanenv to prevent host environment from leaking into container
+        # This ensures the Python interpreter shown is the container's, not the host's
+        env_args: list[str] = ["--cleanenv"]
+
+        # Set PATH explicitly to container-internal paths only
+        # This prevents the host's Python from being found by `command -v python`
+        container_path = "/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin"
+        env_args += ["--env", f"PATH={container_path}"]
+
+        # Forward user-specified environment variables
         for key in self.forward_env:
             if key in os.environ:
                 env_args += ["--env", f"{key}={os.environ[key]}"]
