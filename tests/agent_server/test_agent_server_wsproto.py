@@ -24,6 +24,11 @@ def _prebind_inet_socket() -> tuple[socket.socket, int]:
     s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     s.bind(("127.0.0.1", 0))
     s.listen(128)
+    # Ensure the socket FD survives spawn/exec so the child can adopt it
+    try:
+        s.set_inheritable(True)
+    except Exception:
+        pass
     return s, s.getsockname()[1]
 
 
@@ -35,10 +40,24 @@ def run_agent_server_with_fd(fd: int, api_key: str) -> None:
     # Keep configuration aligned with __main__.py
     import uvicorn
 
+    from openhands.agent_server.api import create_app
+    from openhands.agent_server.config import ENVIRONMENT_VARIABLE_PREFIX, Config
+    from openhands.agent_server.env_parser import from_env
     from openhands.agent_server.logging_config import LOGGING_CONFIG
 
+    # Build a fresh config from env to avoid any cached defaults inherited via fork
+    config = from_env(Config, ENVIRONMENT_VARIABLE_PREFIX)
+    assert config is not None
+
+    # Ensure global default config used by WebSocket router matches this config
+    import openhands.agent_server.config as cfg_mod
+
+    cfg_mod._default_config = config  # type: ignore[attr-defined]
+
+    app = create_app(config)
+
     uvicorn.run(
-        "openhands.agent_server.api:api",
+        app,
         fd=fd,
         log_config=LOGGING_CONFIG,
         ws="wsproto",
