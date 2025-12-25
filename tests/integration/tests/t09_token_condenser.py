@@ -54,8 +54,7 @@ class TokenCondenserTest(BaseIntegrationTest):
             raise SkipTest(
                 "This test stresses long repetitive tool loops to trigger token-based "
                 "condensation. GPT-5.1 Codex Max often declines such requests for "
-                "efficiency/safety reasons. Please run this test on a model that "
-                "allows extended interactive commands."
+                "efficiency/safety reasons."
             )
 
     @property
