@@ -425,3 +425,128 @@ def test_conversation_restart_with_different_agent_context():
             "You current working directory is: /Users/jpshack"
             in new_conversation.agent.agent_context.system_message_suffix
         )
+
+
+def test_conversation_restart_with_different_mcp_config():
+    """
+    Test conversation restart when mcp_config differs.
+
+    This simulates resuming a conversation after enabling/disabling MCP servers.
+    Fixes issue #240 where MCP config changes caused resume failures.
+    """
+    with tempfile.TemporaryDirectory() as temp_dir:
+        # Create agent with puppeteer MCP server enabled
+        original_mcp_config = {
+            "mcpServers": {
+                "puppeteer": {
+                    "command": "npx",
+                    "args": ["-y", "@modelcontextprotocol/server-puppeteer"],
+                    "env": {},
+                    "transport": "stdio",
+                }
+            }
+        }
+
+        tools = [
+            Tool(name="TerminalTool"),
+            Tool(name="FileEditorTool"),
+        ]
+        llm = LLM(
+            model="gpt-4o-mini", api_key=SecretStr("test-key"), usage_id="test-llm"
+        )
+        original_agent = Agent(llm=llm, tools=tools, mcp_config=original_mcp_config)
+
+        # Create conversation with original agent
+        conversation = LocalConversation(
+            agent=original_agent,
+            workspace=temp_dir,
+            persistence_dir=temp_dir,
+            visualizer=None,
+        )
+
+        # Send a message to create state
+        conversation.send_message(
+            Message(role="user", content=[TextContent(text="test message")])
+        )
+
+        conversation_id = conversation.state.id
+        del conversation
+
+        # Resume with different MCP config (puppeteer disabled)
+        new_mcp_config: dict = {}  # No MCP servers enabled
+
+        new_agent = Agent(llm=llm, tools=tools, mcp_config=new_mcp_config)
+
+        # This should succeed - mcp_config differences should be reconciled
+        new_conversation = LocalConversation(
+            agent=new_agent,
+            workspace=temp_dir,
+            persistence_dir=temp_dir,
+            conversation_id=conversation_id,
+            visualizer=None,
+        )
+
+        # Verify state was loaded and mcp_config was updated
+        assert new_conversation.id == conversation_id
+        assert len(new_conversation.state.events) > 0
+        # The new conversation should use the runtime agent's mcp_config
+        assert new_conversation.agent.mcp_config == new_mcp_config
+
+
+def test_conversation_restart_with_different_system_prompt_kwargs():
+    """
+    Test conversation restart when system_prompt_kwargs differs.
+
+    This simulates resuming a conversation with different template variables
+    (e.g., cli_mode). Fixes issue #240.
+    """
+    with tempfile.TemporaryDirectory() as temp_dir:
+        # Create agent without cli_mode
+        tools = [
+            Tool(name="TerminalTool"),
+            Tool(name="FileEditorTool"),
+        ]
+        llm = LLM(
+            model="gpt-4o-mini", api_key=SecretStr("test-key"), usage_id="test-llm"
+        )
+        original_agent = Agent(
+            llm=llm,
+            tools=tools,
+            system_prompt_kwargs={},  # No cli_mode
+        )
+
+        # Create conversation with original agent
+        conversation = LocalConversation(
+            agent=original_agent,
+            workspace=temp_dir,
+            persistence_dir=temp_dir,
+            visualizer=None,
+        )
+
+        # Send a message to create state
+        conversation.send_message(
+            Message(role="user", content=[TextContent(text="test message")])
+        )
+
+        conversation_id = conversation.state.id
+        del conversation
+
+        # Resume with cli_mode enabled
+        new_agent = Agent(llm=llm, tools=tools, system_prompt_kwargs={"cli_mode": True})
+
+        # This should succeed - system_prompt_kwargs differences should be reconciled
+        new_conversation = LocalConversation(
+            agent=new_agent,
+            workspace=temp_dir,
+            persistence_dir=temp_dir,
+            conversation_id=conversation_id,
+            visualizer=None,
+        )
+
+        # Verify state was loaded and system_prompt_kwargs was updated
+        assert new_conversation.id == conversation_id
+        assert len(new_conversation.state.events) > 0
+        # The new conversation should use the runtime agent's system_prompt_kwargs
+        # Note: Agent may add default kwargs like llm_security_analyzer
+        assert "cli_mode" in new_conversation.agent.system_prompt_kwargs
+        assert new_conversation.agent.system_prompt_kwargs["cli_mode"] is True

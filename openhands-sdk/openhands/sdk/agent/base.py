@@ -44,6 +44,21 @@ class AgentBase(DiscriminatedUnionMixin, ABC):
         arbitrary_types_allowed=True,
     )
 
+    # Fields that should always use the runtime value when reconciling with persisted
+    # state. These are environment-specific or dynamic fields that may legitimately
+    # differ between sessions.
+    OVERRIDE_ON_RECONCILE: tuple[str, ...] = (
+        # agent_context contains skills and system_message_suffix which depend on
+        # the current working directory and environment
+        "agent_context",
+        # mcp_config contains MCP server configurations that may be enabled/disabled
+        # between sessions
+        "mcp_config",
+        # system_prompt_kwargs contains runtime-specific template variables like
+        # cli_mode that may differ between sessions
+        "system_prompt_kwargs",
+    )
+
     llm: LLM = Field(
         ...,
         description="LLM configuration for the agent.",
@@ -304,6 +319,14 @@ class AgentBase(DiscriminatedUnionMixin, ABC):
         """
         Return a new AgentBase instance equivalent to `persisted` but with
         explicitly whitelisted fields (e.g. api_key) taken from `self`.
+
+        This method reconciles differences between a runtime agent configuration
+        and a persisted one, allowing certain fields to differ while ensuring
+        core configuration remains consistent.
+
+        Fields in OVERRIDE_ON_RECONCILE are always taken from the runtime (self)
+        instance, as they represent environment-specific or dynamic configuration
+        that may legitimately differ between sessions.
         """
         if persisted.__class__ is not self.__class__:
             raise ValueError(
@@ -332,11 +355,12 @@ class AgentBase(DiscriminatedUnionMixin, ABC):
                 )
                 updates["condenser"] = new_condenser
 
-        # Reconcile agent_context - always use the current environment's agent_context
-        # This allows resuming conversations from different directories and handles
-        # cases where skills, working directory, or other context has changed
-        if self.agent_context is not None:
-            updates["agent_context"] = self.agent_context
+        # Apply OVERRIDE_ON_RECONCILE fields from runtime (self) to updates
+        # These fields are environment-specific and should always use runtime values
+        for field in self.OVERRIDE_ON_RECONCILE:
+            runtime_value = getattr(self, field, None)
+            if runtime_value is not None:
+                updates[field] = runtime_value
 
         # Create maps by tool name for easy lookup
         runtime_tools_map = {tool.name: tool for tool in self.tools}
