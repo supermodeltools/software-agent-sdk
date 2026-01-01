@@ -196,9 +196,7 @@ class DockerWorkspace(RemoteWorkspace):
             mount_path = "/workspace"
             flags += ["-v", f"{self.mount_dir}:{mount_path}"]
             logger.info(
-                "Mounting host dir %s to container path %s",
-                self.mount_dir,
-                mount_path,
+                f"Mounting host dir {self.mount_dir} to container path {mount_path}"
             )
 
         ports = ["-p", f"{self.host_port}:8000"]
@@ -237,7 +235,7 @@ class DockerWorkspace(RemoteWorkspace):
             raise RuntimeError(f"Failed to run docker container: {proc.stderr}")
 
         self._container_id = proc.stdout.strip()
-        logger.info("Started container: %s", self._container_id)
+        logger.info(f"Started container: {self._container_id}")
 
         # Optionally stream logs in background
         if self.detach_logs:
@@ -254,7 +252,7 @@ class DockerWorkspace(RemoteWorkspace):
 
         # Wait for container to be healthy
         self._wait_for_health()
-        logger.info("Docker workspace is ready at %s", self.host)
+        logger.info(f"Docker workspace is ready at {self.host}")
 
         # Now initialize the parent RemoteWorkspace with the container URL
         super().model_post_init(context)
@@ -341,19 +339,19 @@ class DockerWorkspace(RemoteWorkspace):
                 self._logs_thread.join(timeout=2)
 
             # Stop and remove the container
-            logger.info("Stopping container: %s", self._container_id)
+            logger.info(f"Stopping container: {self._container_id}")
             execute_command(["docker", "stop", self._container_id])
             self._container_id = None
 
         # Optionally delete the Docker image
         if self.cleanup_image and self._image_name:
-            logger.info("Deleting Docker image: %s", self._image_name)
+            logger.info(f"Deleting Docker image: {self._image_name}")
             result = execute_command(["docker", "rmi", "-f", self._image_name])
             if result.returncode == 0:
-                logger.info("Successfully deleted image: %s", self._image_name)
+                logger.info(f"Successfully deleted image: {self._image_name}")
             else:
                 logger.warning(
-                    "Failed to delete image %s: %s", self._image_name, result.stderr
+                    f"Failed to delete image {self._image_name}: {result.stderr}"
                 )
             self._image_name = None
 
@@ -369,11 +367,11 @@ class DockerWorkspace(RemoteWorkspace):
         if not self._container_id:
             raise RuntimeError("Cannot pause: container is not running")
 
-        logger.info("Pausing container: %s", self._container_id)
+        logger.info(f"Pausing container: {self._container_id}")
         result = execute_command(["docker", "pause", self._container_id])
         if result.returncode != 0:
             raise RuntimeError(f"Failed to pause container: {result.stderr}")
-        logger.info("Container paused: %s", self._container_id)
+        logger.info(f"Container paused: {self._container_id}")
 
     def resume(self) -> None:
         """Resume a paused Docker container.
@@ -386,11 +384,11 @@ class DockerWorkspace(RemoteWorkspace):
         if not self._container_id:
             raise RuntimeError("Cannot resume: container is not running")
 
-        logger.info("Resuming container: %s", self._container_id)
+        logger.info(f"Resuming container: {self._container_id}")
         result = execute_command(["docker", "unpause", self._container_id])
         if result.returncode != 0:
             raise RuntimeError(f"Failed to resume container: {result.stderr}")
 
         # Wait for health after resuming
         self._wait_for_health(timeout=30.0)
-        logger.info("Container resumed: %s", self._container_id)
+        logger.info(f"Container resumed: {self._container_id}")
