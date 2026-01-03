@@ -18,11 +18,12 @@ from tests.integration.base import BaseIntegrationTest, SkipTest, TestResult
 INSTRUCTION = """
 Solve this multi-step problem using bash commands. Show your reasoning for each step:
 
-1. Calculate compound interest for $10,000 at 5% annually, compounded quarterly for 3 years
-   Formula: A = P(1 + r/n)^(nt) where P=10000, r=0.05, n=4, t=3
+1. Calculate compound interest for $10,000 at 5% annually, compounded quarterly for 3
+years:
+   A = P(1 + r/n)^(nt) where P=10000, r=0.05, n=4, t=3
 
-2. Calculate simple interest for the same amount
-   Formula: A = P(1 + rt) where P=10000, r=0.05, t=3
+2. Calculate simple interest for the same amount:
+   A = P(1 + rt) where P=10000, r=0.05, t=3
 
 3. Calculate the difference between compound and simple interest
 
@@ -31,7 +32,9 @@ Solve this multi-step problem using bash commands. Show your reasoning for each 
    - simple.txt: simple interest result
    - difference.txt: the difference
 
-Use the 'bc' calculator command for each calculation. You can use echo and pipes to calculate.
+Use the 'bc' calculator command for each calculation. You can use echo and pipes to
+calculate.
+
 For example: echo "scale=2; 10000 * 1.05" | bc
 """
 
@@ -148,7 +151,7 @@ class CondensationThinkingTest(BaseIntegrationTest):
         # If we only got one thinking block, send a follow-up to get another
         if self.tool_loop_count < 2:
             self.conversation.send_message(
-                "Now verify your calculations are correct by running the commands again "
+                "Now verify your calculations are correct by re-running the commands "
                 "and comparing the results. Show your reasoning about whether the "
                 "calculations match."
             )
@@ -162,7 +165,9 @@ class CondensationThinkingTest(BaseIntegrationTest):
 
         # Send one more message to see if conversation can continue
         try:
-            self.conversation.send_message("What was the final compound interest result?")
+            self.conversation.send_message(
+                "What was the final compound interest result?"
+            )
             self.conversation.run()
         except Exception as e:
             self.post_condensation_errors.append(str(e))
