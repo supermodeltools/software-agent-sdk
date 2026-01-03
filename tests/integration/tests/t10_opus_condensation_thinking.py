@@ -129,38 +129,37 @@ class CondensationThinkingTest(BaseIntegrationTest):
         if isinstance(event, ActionEvent) and event.thinking_blocks:
             self.tool_loop_count += 1
             self.thinking_block_event_ids.append(event.id)
-            logger.info(
-                f"Tool loop #{self.tool_loop_count} with "
-                f"{len(event.thinking_blocks)} thinking blocks detected (event_id={event.id})"
-            )
+            event_id_short = event.id[:8]
+            logger.info(f"Thinking block #{self.tool_loop_count} ({event_id_short}...)")
 
             # Mark when we've seen the second thinking block
             if self.tool_loop_count == 2:
                 self.second_thinking_detected = True
 
-        # Track condensation requests
+        # Track condensation requests (no logging - implementation detail)
         if isinstance(event, CondensationRequest):
             self.condensation_request_count += 1
-            logger.info(f"CondensationRequest #{self.condensation_request_count} emitted")
 
         # Track condensation events
         if isinstance(event, Condensation):
             self.condensation_count += 1
-            logger.info(f"Condensation #{self.condensation_count}: {len(event.forgotten_event_ids)} events forgotten")
+            forgotten_count = len(event.forgotten_event_ids)
 
             # Check if the first thinking block event was forgotten
             if self.thinking_block_event_ids:
                 first_thinking_id = self.thinking_block_event_ids[0]
                 if first_thinking_id in event.forgotten_event_ids:
                     self.first_thinking_forgotten = True
-                    logger.info(f"  ✓ First thinking block (event_id={first_thinking_id}) WAS forgotten")
+                    status_symbol = "✓"
                 else:
-                    logger.info(f"  ✗ First thinking block (event_id={first_thinking_id}) was NOT forgotten")
+                    status_symbol = "✗"
 
-                # Log all thinking block events and their status
-                for i, tb_id in enumerate(self.thinking_block_event_ids, 1):
-                    status = "forgotten" if tb_id in event.forgotten_event_ids else "kept"
-                    logger.info(f"  Thinking block #{i} (event_id={tb_id}): {status}")
+                first_id_short = first_thinking_id[:8]
+                logger.info(
+                    f"Condensed {forgotten_count} events | "
+                    f"{status_symbol} First thinking block ({first_id_short}...) "
+                    f"{'forgotten' if self.first_thinking_forgotten else 'kept'}"
+                )
 
     def setup(self) -> None:
         """Log test configuration."""
@@ -173,11 +172,12 @@ class CondensationThinkingTest(BaseIntegrationTest):
 
     def verify_result(self) -> TestResult:
         """Verify the test results and document findings."""
-        logger.info("TEST RESULTS:")
-        logger.info(f"  Tool loops with thinking: {self.tool_loop_count}")
-        logger.info(f"  Condensations completed: {self.condensation_count}")
-        logger.info(f"  First thinking block forgotten: {self.first_thinking_forgotten}")
-        logger.info(f"  Post-condensation errors: {len(self.post_condensation_errors)}")
+        logger.info(
+            f"Results: {self.tool_loop_count} thinking blocks, "
+            f"{self.condensation_count} condensations, "
+            f"first {'forgotten' if self.first_thinking_forgotten else 'kept'}, "
+            f"{len(self.post_condensation_errors)} errors"
+        )
 
         # Check if we got the expected scenario
         if self.tool_loop_count < 2:
@@ -262,12 +262,11 @@ class CondensationThinkingTest(BaseIntegrationTest):
             with redirect_stdout(stdout_buffer), redirect_stderr(stderr_buffer):
                 # Send the instruction and run until completion
                 self.conversation.send_message(self.INSTRUCTION)
-                logger.info("Starting initial conversation run...")
                 self.conversation.run()
 
                 # If we only got one thinking block, send a follow-up to get another
                 if self.tool_loop_count < 2:
-                    logger.info(f"Got {self.tool_loop_count} thinking block(s), sending follow-up...")
+                    logger.info(f"Requesting verification (need 2nd thinking block)")
                     self.conversation.send_message(
                         "Now verify your calculations are correct by running the commands again "
                         "and comparing the results. Show your reasoning about whether the "
@@ -275,27 +274,25 @@ class CondensationThinkingTest(BaseIntegrationTest):
                     )
                     self.conversation.run()
 
-                # If we still haven't detected second thinking block, we can't test condensation
+                # Warn if we still don't have second thinking block
                 if not self.second_thinking_detected:
-                    logger.warning("Second thinking block never detected, continuing anyway...")
+                    logger.warning("⚠ Second thinking block not detected")
 
                 # Manually trigger condensation
-                logger.info("MANUALLY TRIGGERING CONDENSATION")
                 try:
                     self.conversation.condense()
-                    logger.info("✓ Manual condensation completed successfully")
+                    logger.info("✓ Condensation completed")
                 except Exception as e:
-                    logger.error(f"✗ Error during condensation: {e}")
+                    logger.error(f"✗ Condensation failed: {e}")
                     self.post_condensation_errors.append(str(e))
 
                 # Send one more message to see if conversation can continue after condensation
-                logger.info("Testing post-condensation behavior...")
                 try:
                     self.conversation.send_message("What was the final compound interest result?")
                     self.conversation.run()
-                    logger.info("✓ Post-condensation conversation succeeded")
+                    logger.info("✓ Post-condensation query succeeded")
                 except Exception as e:
-                    logger.error(f"✗ Error in post-condensation conversation: {e}")
+                    logger.error(f"✗ Post-condensation query failed: {e}")
                     self.post_condensation_errors.append(str(e))
 
             # Save captured output to log file
