@@ -674,9 +674,7 @@ def test_condense_with_hard_requirement_and_no_condensation_available(
             return_value={Reason.REQUEST},
         ),
         patch.object(condenser, "_get_forgotten_events", return_value=([], 0)),
-        patch.object(
-            LLMSummarizingCondenser, "hard_context_reset", return_value=None
-        ),
+        patch.object(LLMSummarizingCondenser, "hard_context_reset", return_value=None),
     ):
         with pytest.raises(NoCondensationAvailableException):
             condenser.condense(view)
