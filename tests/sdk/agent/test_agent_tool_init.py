@@ -8,7 +8,7 @@ from rich.text import Text
 from openhands.sdk import LLM, Conversation
 from openhands.sdk.agent import Agent
 from openhands.sdk.llm.message import ImageContent, TextContent
-from openhands.sdk.tool import ToolDefinition
+from openhands.sdk.tool import FinishTool, ThinkTool, ToolDefinition
 from openhands.sdk.tool.registry import register_tool
 from openhands.sdk.tool.spec import Tool
 from openhands.sdk.tool.tool import Action, Observation, ToolExecutor
@@ -75,7 +75,7 @@ def test_agent_initializes_tools_from_toolspec_locally(monkeypatch):
 def test_agent_disable_think_tool():
     """Test that the think tool can be disabled."""
     llm = LLM(model="test-model", usage_id="test-llm")
-    agent = Agent(llm=llm, tools=[], disable_default_tools=["think"])
+    agent = Agent(llm=llm, tools=[], disable_default_tools=[ThinkTool])
 
     Conversation(agent=agent, visualizer=None)
 
@@ -88,7 +88,7 @@ def test_agent_disable_think_tool():
 def test_agent_disable_finish_tool():
     """Test that the finish tool can be disabled."""
     llm = LLM(model="test-model", usage_id="test-llm")
-    agent = Agent(llm=llm, tools=[], disable_default_tools=["finish"])
+    agent = Agent(llm=llm, tools=[], disable_default_tools=[FinishTool])
 
     Conversation(agent=agent, visualizer=None)
 
@@ -101,7 +101,7 @@ def test_agent_disable_finish_tool():
 def test_agent_disable_all_default_tools():
     """Test that all default tools can be disabled."""
     llm = LLM(model="test-model", usage_id="test-llm")
-    agent = Agent(llm=llm, tools=[], disable_default_tools=["finish", "think"])
+    agent = Agent(llm=llm, tools=[], disable_default_tools=[FinishTool, ThinkTool])
 
     Conversation(agent=agent, visualizer=None)
 
@@ -163,7 +163,7 @@ def test_agent_replace_finish_with_custom_tool():
     agent = Agent(
         llm=llm,
         tools=[Tool(name="custom_finish")],
-        disable_default_tools=["finish"],
+        disable_default_tools=[FinishTool],
     )
 
     Conversation(agent=agent, visualizer=None)

@@ -6,7 +6,14 @@ from collections.abc import Generator, Iterable, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any
 
-from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    PrivateAttr,
+    field_serializer,
+    field_validator,
+)
 
 from openhands.sdk.context.agent_context import AgentContext
 from openhands.sdk.context.condenser import CondenserBase, LLMSummarizingCondenser
@@ -81,14 +88,15 @@ class AgentBase(DiscriminatedUnionMixin, ABC):
         " added.",
         examples=["^(?!repomix)(.*)|^repomix.*pack_codebase.*$"],
     )
-    disable_default_tools: list[str] = Field(
+    disable_default_tools: list[type[ToolDefinition]] = Field(
         default_factory=list,
         description=(
-            "List of default tool names to disable. By default, the agent includes "
-            "'finish' and 'think' tools. Use this to exclude specific default tools "
-            "if you want to provide custom implementations."
+            "List of default tool classes to disable. By default, the agent includes "
+            "FinishTool and ThinkTool. Use this to exclude specific default tools "
+            "if you want to provide custom implementations. "
+            "Example: disable_default_tools=[ThinkTool] or "
+            "disable_default_tools=[FinishTool, ThinkTool]"
         ),
-        examples=[["think"], ["finish", "think"]],
     )
     agent_context: AgentContext | None = Field(
         default=None,
@@ -165,6 +173,32 @@ class AgentBase(DiscriminatedUnionMixin, ABC):
     # Runtime materialized tools; private and non-serializable
     _tools: dict[str, ToolDefinition] = PrivateAttr(default_factory=dict)
     _initialized: bool = PrivateAttr(default=False)
+
+    @field_serializer("disable_default_tools")
+    def _ser_disable_default_tools(
+        self, tools: list[type[ToolDefinition]]
+    ) -> list[str]:
+        """Serialize tool classes to their class names for JSON storage."""
+        return [tool.__name__ for tool in tools]
+
+    @field_validator("disable_default_tools", mode="before")
+    @classmethod
+    def _val_disable_default_tools(
+        cls, v: list[str] | list[type[ToolDefinition]]
+    ) -> list[type[ToolDefinition]]:
+        """Deserialize tool class names back to tool classes."""
+        if not v:
+            return []
+        # If already a list of classes, return as-is
+        if isinstance(v[0], type):
+            return v  # type: ignore[return-value]
+        # Convert string names to tool classes
+        result: list[type[ToolDefinition]] = []
+        for name in v:
+            assert isinstance(name, str)
+            tool_class = ToolDefinition.resolve_kind(name)
+            result.append(tool_class)
+        return result
 
     @property
     def prompt_dir(self) -> str:
@@ -267,15 +301,13 @@ class AgentBase(DiscriminatedUnionMixin, ABC):
 
         # Include built-in tools unless disabled; not subject to regex filtering
         # Instantiate built-in tools using their .create() method
-        disabled_tools_set = set(self.disable_default_tools)
+        disabled_tool_classes = set(self.disable_default_tools)
         for tool_class in BUILT_IN_TOOLS:
-            # Create tool instances to get their names
+            if tool_class in disabled_tool_classes:
+                logger.info(f"Skipping disabled default tool: {tool_class.name}")
+                continue
             tool_instances = tool_class.create(state)
-            for tool_instance in tool_instances:
-                if tool_instance.name not in disabled_tools_set:
-                    tools.append(tool_instance)
-                else:
-                    logger.info(f"Skipping disabled default tool: {tool_instance.name}")
+            tools.extend(tool_instances)
 
         # Check tool types
         for tool in tools:
