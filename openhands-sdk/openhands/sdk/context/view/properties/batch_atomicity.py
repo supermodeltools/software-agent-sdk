@@ -1,9 +1,12 @@
 """Property for ensuring ActionEvent batches remain atomic."""
 
-from openhands.sdk.context.view.event_mappings import EventMappings
+from collections import defaultdict
+from collections.abc import Sequence
+
 from openhands.sdk.context.view.manipulation_indices import ManipulationIndices
 from openhands.sdk.context.view.properties.base import ViewPropertyBase
 from openhands.sdk.event.base import Event, LLMConvertibleEvent
+from openhands.sdk.event.llm_convertible.action import ActionEvent
 from openhands.sdk.event.types import EventID
 
 
@@ -14,6 +17,34 @@ class BatchAtomicityProperty(ViewPropertyBase):
     are semantically related. If any one is forgotten (e.g., during condensation),
     all must be forgotten together to maintain consistency.
     """
+
+    @staticmethod
+    def _build_batches(events: Sequence[Event]) -> dict[EventID, list[EventID]]:
+        """Build mapping of llm_response_id to ActionEvent IDs.
+
+        Args:
+            events: Sequence of events to analyze
+
+        Returns:
+            Dictionary mapping llm_response_id to list of ActionEvent IDs
+        """
+        batches: dict[EventID, list[EventID]] = defaultdict(list)
+        for event in events:
+            if isinstance(event, ActionEvent):
+                batches[event.llm_response_id].append(event.id)
+        return dict(batches)
+
+    @staticmethod
+    def _build_event_id_to_index(events: Sequence[Event]) -> dict[EventID, int]:
+        """Build mapping of event ID to index.
+
+        Args:
+            events: Sequence of events to analyze
+
+        Returns:
+            Dictionary mapping event ID to index in the list
+        """
+        return {event.id: idx for idx, event in enumerate(events)}
 
     def enforce(
         self, current_view_events: list[LLMConvertibleEvent], all_events: list[Event]
@@ -31,15 +62,15 @@ class BatchAtomicityProperty(ViewPropertyBase):
             Set of EventIDs to remove from the current view
         """
         # Build mappings from all events to understand complete batches
-        all_mappings = EventMappings.from_events(all_events)
-        view_mappings = EventMappings.from_events(current_view_events)
+        all_batches = self._build_batches(all_events)
+        view_batches = self._build_batches(current_view_events)
 
         events_to_remove: set[EventID] = set()
 
         # Check each batch in the original events
-        for llm_response_id, action_ids in all_mappings.batches.items():
+        for llm_response_id, action_ids in all_batches.items():
             # Get which actions from this batch are in the view
-            actions_in_view = view_mappings.batches.get(llm_response_id, [])
+            actions_in_view = view_batches.get(llm_response_id, [])
 
             # If batch is partially present (some but not all actions)
             if actions_in_view and len(actions_in_view) < len(action_ids):
@@ -63,15 +94,16 @@ class BatchAtomicityProperty(ViewPropertyBase):
         Returns:
             ManipulationIndices with all valid manipulation points
         """
-        mappings = EventMappings.from_events(current_view_events)
+        batches = self._build_batches(current_view_events)
+        event_id_to_index = self._build_event_id_to_index(current_view_events)
 
         # Find atomic ranges for each batch
         atomic_ranges: list[tuple[int, int]] = []
 
-        for llm_response_id, action_ids in mappings.batches.items():
+        for llm_response_id, action_ids in batches.items():
             if len(action_ids) > 1:
                 # Get indices for all actions in this batch
-                indices = [mappings.event_id_to_index[aid] for aid in action_ids]
+                indices = [event_id_to_index[aid] for aid in action_ids]
                 min_idx = min(indices)
                 max_idx = max(indices)
                 atomic_ranges.append((min_idx, max_idx))

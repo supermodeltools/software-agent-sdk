@@ -1,6 +1,8 @@
 """Property for ensuring tool loops remain atomic."""
 
-from openhands.sdk.context.view.event_mappings import EventMappings
+from collections import defaultdict
+from collections.abc import Sequence
+
 from openhands.sdk.context.view.manipulation_indices import ManipulationIndices
 from openhands.sdk.context.view.properties.base import ViewPropertyBase
 from openhands.sdk.event.base import Event, LLMConvertibleEvent
@@ -19,27 +21,56 @@ class ToolLoopAtomicityProperty(ViewPropertyBase):
     - Terminated by the first non-ActionEvent/ObservationEvent
     """
 
+    @staticmethod
+    def _build_batches(events: Sequence[Event]) -> dict[EventID, list[EventID]]:
+        """Build mapping of llm_response_id to ActionEvent IDs.
+
+        Args:
+            events: Sequence of events to analyze
+
+        Returns:
+            Dictionary mapping llm_response_id to list of ActionEvent IDs
+        """
+        batches: dict[EventID, list[EventID]] = defaultdict(list)
+        for event in events:
+            if isinstance(event, ActionEvent):
+                batches[event.llm_response_id].append(event.id)
+        return dict(batches)
+
+    @staticmethod
+    def _build_event_id_to_index(events: Sequence[Event]) -> dict[EventID, int]:
+        """Build mapping of event ID to index.
+
+        Args:
+            events: Sequence of events to analyze
+
+        Returns:
+            Dictionary mapping event ID to index in the list
+        """
+        return {event.id: idx for idx, event in enumerate(events)}
+
     def _identify_tool_loops(self, events: list[Event]) -> list[list[EventID]]:
         """Identify all tool loops in the event sequence.
 
         Returns:
             List of tool loops, where each tool loop is a list of EventIDs
         """
-        mappings = EventMappings.from_events(events)
+        batches = self._build_batches(events)
+        event_id_to_index = self._build_event_id_to_index(events)
 
         # Build batch ranges with metadata
         batch_ranges: list[tuple[int, int, bool, list[EventID]]] = []
 
-        for llm_response_id, action_ids in mappings.batches.items():
+        for llm_response_id, action_ids in batches.items():
             # Get indices for all actions in this batch
-            indices = [mappings.event_id_to_index[aid] for aid in action_ids]
+            indices = [event_id_to_index[aid] for aid in action_ids]
             min_idx = min(indices)
             max_idx = max(indices)
 
             # Check if any action in this batch has thinking blocks
             has_thinking = False
             for action_id in action_ids:
-                idx = mappings.event_id_to_index[action_id]
+                idx = event_id_to_index[action_id]
                 event = events[idx]
                 if isinstance(event, ActionEvent) and event.thinking_blocks:
                     has_thinking = True
@@ -161,21 +192,22 @@ class ToolLoopAtomicityProperty(ViewPropertyBase):
         Returns:
             ManipulationIndices with all valid manipulation points
         """
-        mappings = EventMappings.from_events(current_view_events)
+        batches = self._build_batches(current_view_events)
+        event_id_to_index = self._build_event_id_to_index(current_view_events)
 
         # Build batch ranges with metadata
         batch_ranges: list[tuple[int, int, bool]] = []
 
-        for llm_response_id, action_ids in mappings.batches.items():
+        for llm_response_id, action_ids in batches.items():
             # Get indices for all actions in this batch
-            indices = [mappings.event_id_to_index[aid] for aid in action_ids]
+            indices = [event_id_to_index[aid] for aid in action_ids]
             min_idx = min(indices)
             max_idx = max(indices)
 
             # Check if any action in this batch has thinking blocks
             has_thinking = False
             for action_id in action_ids:
-                idx = mappings.event_id_to_index[action_id]
+                idx = event_id_to_index[action_id]
                 event = current_view_events[idx]
                 if isinstance(event, ActionEvent) and event.thinking_blocks:
                     has_thinking = True
