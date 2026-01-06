@@ -91,6 +91,7 @@ def get_valid_ref(repo_dir: str | Path) -> str | None:
     refs_to_try = []
 
     # Try current branch's origin
+    has_commits = True
     try:
         current_branch = run_git_command(
             ["git", "--no-pager", "rev-parse", "--abbrev-ref", "HEAD"], repo_dir
@@ -98,43 +99,51 @@ def get_valid_ref(repo_dir: str | Path) -> str | None:
         if current_branch and current_branch != "HEAD":  # Not in detached HEAD state
             refs_to_try.append(f"origin/{current_branch}")
             logger.debug(f"Added current branch reference: origin/{current_branch}")
-    except GitCommandError:
-        logger.debug("Could not get current branch name")
+    except GitCommandError as e:
+        # Check if this is a repo with no commits (e.g., freshly initialized with git init)
+        if "unknown revision" in e.stderr or "ambiguous argument" in e.stderr:
+            has_commits = False
+            logger.debug("Repository has no commits yet")
+        else:
+            logger.debug("Could not get current branch name")
 
-    # Try to get default branch from remote
-    try:
-        remote_info = run_git_command(
-            ["git", "--no-pager", "remote", "show", "origin"], repo_dir
-        )
-        for line in remote_info.splitlines():
-            if "HEAD branch:" in line:
-                default_branch = line.split(":")[-1].strip()
-                if default_branch:
-                    refs_to_try.append(f"origin/{default_branch}")
-                    logger.debug(
-                        f"Added default branch reference: origin/{default_branch}"
-                    )
-
-                    # Also try merge base with default branch
-                    try:
-                        merge_base = run_git_command(
-                            [
-                                "git",
-                                "--no-pager",
-                                "merge-base",
-                                "HEAD",
-                                f"origin/{default_branch}",
-                            ],
-                            repo_dir,
+    # Only try to get default branch from remote if we have commits.
+    # Empty repos (created with git init) won't have remotes and won't benefit
+    # from remote info anyway - we'll use the empty tree hash as fallback.
+    if has_commits:
+        try:
+            remote_info = run_git_command(
+                ["git", "--no-pager", "remote", "show", "origin"], repo_dir
+            )
+            for line in remote_info.splitlines():
+                if "HEAD branch:" in line:
+                    default_branch = line.split(":")[-1].strip()
+                    if default_branch:
+                        refs_to_try.append(f"origin/{default_branch}")
+                        logger.debug(
+                            f"Added default branch reference: origin/{default_branch}"
                         )
-                        if merge_base:
-                            refs_to_try.append(merge_base)
-                            logger.debug(f"Added merge base reference: {merge_base}")
-                    except GitCommandError:
-                        logger.debug("Could not get merge base")
-                break
-    except GitCommandError:
-        logger.debug("Could not get remote information")
+
+                        # Also try merge base with default branch
+                        try:
+                            merge_base = run_git_command(
+                                [
+                                    "git",
+                                    "--no-pager",
+                                    "merge-base",
+                                    "HEAD",
+                                    f"origin/{default_branch}",
+                                ],
+                                repo_dir,
+                            )
+                            if merge_base:
+                                refs_to_try.append(merge_base)
+                                logger.debug(f"Added merge base reference: {merge_base}")
+                        except GitCommandError:
+                            logger.debug("Could not get merge base")
+                    break
+        except GitCommandError:
+            logger.debug("Could not get remote information")
 
     # Add empty tree as fallback for new repositories
     refs_to_try.append(GIT_EMPTY_TREE_HASH)
