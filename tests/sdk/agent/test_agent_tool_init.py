@@ -8,7 +8,7 @@ from rich.text import Text
 from openhands.sdk import LLM, Conversation
 from openhands.sdk.agent import Agent
 from openhands.sdk.llm.message import ImageContent, TextContent
-from openhands.sdk.tool import FinishTool, ThinkTool, ToolDefinition
+from openhands.sdk.tool import ToolDefinition
 from openhands.sdk.tool.registry import register_tool
 from openhands.sdk.tool.spec import Tool
 from openhands.sdk.tool.tool import Action, Observation, ToolExecutor
@@ -75,7 +75,7 @@ def test_agent_initializes_tools_from_toolspec_locally(monkeypatch):
 def test_agent_include_only_finish_tool():
     """Test that only the finish tool can be included (think tool excluded)."""
     llm = LLM(model="test-model", usage_id="test-llm")
-    agent = Agent(llm=llm, tools=[], include_default_tools=[FinishTool])
+    agent = Agent(llm=llm, tools=[], include_default_tools=["FinishTool"])
 
     Conversation(agent=agent, visualizer=None)
 
@@ -88,7 +88,7 @@ def test_agent_include_only_finish_tool():
 def test_agent_include_only_think_tool():
     """Test that only the think tool can be included (finish tool excluded)."""
     llm = LLM(model="test-model", usage_id="test-llm")
-    agent = Agent(llm=llm, tools=[], include_default_tools=[ThinkTool])
+    agent = Agent(llm=llm, tools=[], include_default_tools=["ThinkTool"])
 
     Conversation(agent=agent, visualizer=None)
 
@@ -163,7 +163,9 @@ def test_agent_replace_finish_with_custom_tool():
     agent = Agent(
         llm=llm,
         tools=[Tool(name="custom_finish")],
-        include_default_tools=[ThinkTool],  # Only include ThinkTool, exclude FinishTool
+        include_default_tools=[
+            "ThinkTool"
+        ],  # Only include ThinkTool, exclude FinishTool
     )
 
     Conversation(agent=agent, visualizer=None)

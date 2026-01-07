@@ -175,19 +175,22 @@ class AgentBase(DiscriminatedUnionMixin, ABC):
 
     @field_validator("include_default_tools", mode="before")
     @classmethod
-    def _val_include_default_tools(
-        cls, v: list[str | type[ToolDefinition]]
-    ) -> list[str]:
-        """Convert tool classes to their class names if needed."""
+    def _val_include_default_tools(cls, v: Any) -> list[str]:
+        """Convert tool classes to their class names if needed.
+
+        Accepts both strings and tool classes for backward compatibility.
+        """
         if not v:
             return []
         result: list[str] = []
         for item in v:
             if isinstance(item, str):
                 result.append(item)
-            else:
+            elif isinstance(item, type):
                 # It's a tool class
                 result.append(item.__name__)
+            else:
+                raise ValueError(f"Invalid item type: {type(item)}")
         return result
 
     @property
