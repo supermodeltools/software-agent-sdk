@@ -72,10 +72,10 @@ def test_agent_initializes_tools_from_toolspec_locally(monkeypatch):
         assert "think" in runtime_tools
 
 
-def test_agent_disable_think_tool():
-    """Test that the think tool can be disabled."""
+def test_agent_include_only_finish_tool():
+    """Test that only the finish tool can be included (think tool excluded)."""
     llm = LLM(model="test-model", usage_id="test-llm")
-    agent = Agent(llm=llm, tools=[], disable_default_tools=[ThinkTool])
+    agent = Agent(llm=llm, tools=[], include_default_tools=[FinishTool])
 
     Conversation(agent=agent, visualizer=None)
 
@@ -85,10 +85,10 @@ def test_agent_disable_think_tool():
         assert "think" not in runtime_tools
 
 
-def test_agent_disable_finish_tool():
-    """Test that the finish tool can be disabled."""
+def test_agent_include_only_think_tool():
+    """Test that only the think tool can be included (finish tool excluded)."""
     llm = LLM(model="test-model", usage_id="test-llm")
-    agent = Agent(llm=llm, tools=[], disable_default_tools=[FinishTool])
+    agent = Agent(llm=llm, tools=[], include_default_tools=[ThinkTool])
 
     Conversation(agent=agent, visualizer=None)
 
@@ -99,9 +99,9 @@ def test_agent_disable_finish_tool():
 
 
 def test_agent_disable_all_default_tools():
-    """Test that all default tools can be disabled."""
+    """Test that all default tools can be disabled with include_default_tools=[]."""
     llm = LLM(model="test-model", usage_id="test-llm")
-    agent = Agent(llm=llm, tools=[], disable_default_tools=[FinishTool, ThinkTool])
+    agent = Agent(llm=llm, tools=[], include_default_tools=[])
 
     Conversation(agent=agent, visualizer=None)
 
@@ -163,7 +163,7 @@ def test_agent_replace_finish_with_custom_tool():
     agent = Agent(
         llm=llm,
         tools=[Tool(name="custom_finish")],
-        disable_default_tools=[FinishTool],
+        include_default_tools=[ThinkTool],  # Only include ThinkTool, exclude FinishTool
     )
 
     Conversation(agent=agent, visualizer=None)

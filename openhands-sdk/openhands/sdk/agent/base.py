@@ -87,14 +87,14 @@ class AgentBase(DiscriminatedUnionMixin, ABC):
         " added.",
         examples=["^(?!repomix)(.*)|^repomix.*pack_codebase.*$"],
     )
-    disable_default_tools: list[type[ToolDefinition]] = Field(
-        default_factory=list,
+    include_default_tools: list[type[ToolDefinition]] = Field(
+        default_factory=lambda: list(BUILT_IN_TOOLS),
         description=(
-            "List of default tool classes to disable. By default, the agent includes "
-            "FinishTool and ThinkTool. Use this to exclude specific default tools "
-            "if you want to provide custom implementations. "
-            "Example: disable_default_tools=[ThinkTool] or "
-            "disable_default_tools=[FinishTool, ThinkTool]"
+            "List of default tool classes to include. By default, the agent includes "
+            "FinishTool and ThinkTool. Set to an empty list to disable all default "
+            "tools, or provide a subset to include only specific ones. "
+            "Example: include_default_tools=[FinishTool] to only include FinishTool, "
+            "or include_default_tools=[] to disable all default tools."
         ),
     )
     agent_context: AgentContext | None = Field(
@@ -173,16 +173,16 @@ class AgentBase(DiscriminatedUnionMixin, ABC):
     _tools: dict[str, ToolDefinition] = PrivateAttr(default_factory=dict)
     _initialized: bool = PrivateAttr(default=False)
 
-    @field_serializer("disable_default_tools")
-    def _ser_disable_default_tools(
+    @field_serializer("include_default_tools")
+    def _ser_include_default_tools(
         self, tools: list[type[ToolDefinition]]
     ) -> list[str]:
         """Serialize tool classes to their class names for JSON storage."""
         return [tool.__name__ for tool in tools]
 
-    @field_validator("disable_default_tools", mode="before")
+    @field_validator("include_default_tools", mode="before")
     @classmethod
-    def _val_disable_default_tools(
+    def _val_include_default_tools(
         cls, v: list[str] | list[type[ToolDefinition]]
     ) -> list[type[ToolDefinition]]:
         """Deserialize tool class names back to tool classes."""
@@ -298,13 +298,9 @@ class AgentBase(DiscriminatedUnionMixin, ABC):
                 f"{[tool.name for tool in tools]}",
             )
 
-        # Include built-in tools unless disabled; not subject to regex filtering
-        # Instantiate built-in tools using their .create() method
-        disabled_tool_classes = set(self.disable_default_tools)
-        for tool_class in BUILT_IN_TOOLS:
-            if tool_class in disabled_tool_classes:
-                logger.info(f"Skipping disabled default tool: {tool_class.name}")
-                continue
+        # Include default tools from include_default_tools; not subject to regex
+        # filtering. Instantiate built-in tools using their .create() method
+        for tool_class in self.include_default_tools:
             tool_instances = tool_class.create(state)
             tools.extend(tool_instances)
 
