@@ -11,7 +11,6 @@ from pydantic import (
     ConfigDict,
     Field,
     PrivateAttr,
-    field_serializer,
     field_validator,
 )
 
@@ -87,15 +86,16 @@ class AgentBase(DiscriminatedUnionMixin, ABC):
         " added.",
         examples=["^(?!repomix)(.*)|^repomix.*pack_codebase.*$"],
     )
-    include_default_tools: list[type[ToolDefinition]] = Field(
-        default_factory=lambda: list(BUILT_IN_TOOLS),
+    include_default_tools: list[str] = Field(
+        default_factory=lambda: [tool.__name__ for tool in BUILT_IN_TOOLS],
         description=(
-            "List of default tool classes to include. By default, the agent includes "
-            "FinishTool and ThinkTool. Set to an empty list to disable all default "
-            "tools, or provide a subset to include only specific ones. "
-            "Example: include_default_tools=[FinishTool] to only include FinishTool, "
+            "List of default tool class names to include. By default, the agent "
+            "includes 'FinishTool' and 'ThinkTool'. Set to an empty list to disable "
+            "all default tools, or provide a subset to include only specific ones. "
+            "Example: include_default_tools=['FinishTool'] to only include FinishTool, "
             "or include_default_tools=[] to disable all default tools."
         ),
+        examples=[["FinishTool", "ThinkTool"], ["FinishTool"], []],
     )
     agent_context: AgentContext | None = Field(
         default=None,
@@ -173,30 +173,21 @@ class AgentBase(DiscriminatedUnionMixin, ABC):
     _tools: dict[str, ToolDefinition] = PrivateAttr(default_factory=dict)
     _initialized: bool = PrivateAttr(default=False)
 
-    @field_serializer("include_default_tools")
-    def _ser_include_default_tools(
-        self, tools: list[type[ToolDefinition]]
-    ) -> list[str]:
-        """Serialize tool classes to their class names for JSON storage."""
-        return [tool.__name__ for tool in tools]
-
     @field_validator("include_default_tools", mode="before")
     @classmethod
     def _val_include_default_tools(
-        cls, v: list[str] | list[type[ToolDefinition]]
-    ) -> list[type[ToolDefinition]]:
-        """Deserialize tool class names back to tool classes."""
+        cls, v: list[str | type[ToolDefinition]]
+    ) -> list[str]:
+        """Convert tool classes to their class names if needed."""
         if not v:
             return []
-        # If already a list of classes, return as-is
-        if isinstance(v[0], type):
-            return v  # type: ignore[return-value]
-        # Convert string names to tool classes
-        result: list[type[ToolDefinition]] = []
-        for name in v:
-            assert isinstance(name, str)
-            tool_class = ToolDefinition.resolve_kind(name)
-            result.append(tool_class)
+        result: list[str] = []
+        for item in v:
+            if isinstance(item, str):
+                result.append(item)
+            else:
+                # It's a tool class
+                result.append(item.__name__)
         return result
 
     @property
@@ -299,8 +290,9 @@ class AgentBase(DiscriminatedUnionMixin, ABC):
             )
 
         # Include default tools from include_default_tools; not subject to regex
-        # filtering. Instantiate built-in tools using their .create() method
-        for tool_class in self.include_default_tools:
+        # filtering. Resolve tool class names and instantiate using their .create()
+        for tool_name in self.include_default_tools:
+            tool_class = ToolDefinition.resolve_kind(tool_name)
             tool_instances = tool_class.create(state)
             tools.extend(tool_instances)
 
