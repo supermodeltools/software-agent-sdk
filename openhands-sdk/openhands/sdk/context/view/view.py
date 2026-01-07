@@ -184,19 +184,16 @@ class View(BaseModel):
                 unhandled_condensation_request = True
                 break
 
-        # Apply property enforcement iteratively
+        # Define view properties for enforcement and manipulation indices
         # Properties are checked in order, and we restart from the first property
         # whenever any property removes events (to handle cascading effects)
-        tool_call_matching = ToolCallMatchingProperty()
-        batch_atomicity = BatchAtomicityProperty()
-        tool_loop_atomicity = ToolLoopAtomicityProperty()
-
         properties = [
-            tool_call_matching,  # Match actions/observations first
-            batch_atomicity,  # Then ensure batch atomicity
-            tool_loop_atomicity,  # Finally ensure tool loop atomicity
+            ToolCallMatchingProperty(),  # Match actions/observations first
+            BatchAtomicityProperty(),  # Then ensure batch atomicity
+            ToolLoopAtomicityProperty(),  # Finally ensure tool loop atomicity
         ]
 
+        # Apply property enforcement iteratively
         view_events = kept_events
         max_iterations = 10  # Safety limit to prevent infinite loops
 
@@ -229,22 +226,16 @@ class View(BaseModel):
                 f"This may indicate cascading enforcement issues."
             )
 
-        # Calculate manipulation_indices using the same property instances
-        # For empty views, return {0} as the single manipulation index
+        # Calculate manipulation_indices by taking intersection of all properties
         if not view_events:
             final_indices = ManipulationIndices({0})
         else:
-            batch_indices = batch_atomicity.manipulation_indices(view_events, events)
-            tool_loop_indices = tool_loop_atomicity.manipulation_indices(
-                view_events, events
-            )
-            tool_call_indices = tool_call_matching.manipulation_indices(
-                view_events, events
-            )
-
-            # Take the intersection of all three sets
+            # Get manipulation indices from each property and intersect them
+            all_indices = [
+                prop.manipulation_indices(view_events, events) for prop in properties
+            ]
             final_indices = ManipulationIndices(
-                batch_indices & tool_loop_indices & tool_call_indices
+                set.intersection(*all_indices) if all_indices else set()
             )
 
         return View(
