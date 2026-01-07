@@ -226,7 +226,9 @@ def _base_slug(image: str, max_len: int = 64) -> str:
 
     # Parse components from the slug form
     if "_tag_" in base_slug:
-        left, tag = base_slug.split("_tag_", 1)
+        # Use rsplit to handle registries with ports (e.g., localhost:5000) so we
+        # only treat the last ":" as the tag separator.
+        left, tag = base_slug.rsplit("_tag_", 1)
     else:
         left, tag = base_slug, ""
 
@@ -234,7 +236,8 @@ def _base_slug(image: str, max_len: int = 64) -> str:
     repo = parts[-1] if parts else left  # last path segment is the repo
 
     # Reconstruct a compact, identifiable core: "<repo>[_tag_<tag>]"
-    ident = repo + (f"_tag_{tag}" if tag else "")
+    tag_piece = f"_tag_{tag}" if tag else ""
+    ident = repo + tag_piece
 
     # Fit within budget, reserving space for the digest suffix
     visible_budget = max_len - len(suffix)
@@ -242,8 +245,26 @@ def _base_slug(image: str, max_len: int = 64) -> str:
         f"max_len too small to fit digest suffix with length {len(suffix)}"
     )
 
-    kept = ident[:visible_budget]
-    return kept + suffix
+    if len(ident) > visible_budget:
+        if tag_piece and len(tag_piece) < visible_budget:
+            # Keep the full tag portion and trim the repo prefix if needed.
+            head_budget = visible_budget - len(tag_piece)
+            ident = repo[:head_budget] + tag_piece
+        elif tag_piece:
+            # Tag portion alone is longer than the budget; keep the leading part
+            # so sentinel substrings like "tag_latest" remain intact.
+            ident = tag_piece[:visible_budget]
+        else:
+            ident = ident[:visible_budget]
+
+    truncated = ident + suffix
+    logger.debug(
+        "[base-slug] Truncated base image '%s' to slug '%s' (max_len=%d)",
+        image,
+        truncated,
+        max_len,
+    )
+    return truncated
 
 
 def _git_info() -> tuple[str, str]:
