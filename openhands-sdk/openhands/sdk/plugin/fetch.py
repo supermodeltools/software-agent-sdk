@@ -10,6 +10,7 @@ from pathlib import Path
 
 from openhands.sdk.logger import get_logger
 
+
 logger = get_logger(__name__)
 
 DEFAULT_CACHE_DIR = Path.home() / ".openhands" / "cache" / "plugins"

@@ -16,7 +16,7 @@ from openhands.sdk.context.skills.utils import (
 )
 from openhands.sdk.hooks import HookConfig
 from openhands.sdk.logger import get_logger
-from openhands.sdk.plugin.fetch import PluginFetchError, fetch_plugin
+from openhands.sdk.plugin.fetch import fetch_plugin
 from openhands.sdk.plugin.types import (
     AgentDefinition,
     CommandDefinition,

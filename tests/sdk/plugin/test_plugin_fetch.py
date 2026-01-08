@@ -132,7 +132,9 @@ class TestExtractReadableName:
 
     def test_long_name_truncated(self):
         """Test that long names are truncated."""
-        name = _extract_readable_name("github:owner/this-is-a-very-long-plugin-name-that-should-be-truncated")
+        name = _extract_readable_name(
+            "github:owner/this-is-a-very-long-plugin-name-that-should-be-truncated"
+        )
         assert len(name) <= 32
 
 
@@ -257,7 +259,9 @@ class TestPluginFetch:
         mock_run.return_value = MagicMock(returncode=0, stdout=b"main\n", stderr=b"")
 
         # Mock get_cache_path to return our fake path
-        with patch("openhands.sdk.plugin.fetch.get_cache_path", return_value=cache_path):
+        with patch(
+            "openhands.sdk.plugin.fetch.get_cache_path", return_value=cache_path
+        ):
             Plugin.fetch("github:owner/repo", cache_dir=tmp_path, update=True)
 
         # Verify git fetch was called (not clone)
@@ -277,7 +281,9 @@ class TestPluginFetch:
 
         mock_run.return_value = MagicMock(returncode=0, stdout=b"main\n", stderr=b"")
 
-        with patch("openhands.sdk.plugin.fetch.get_cache_path", return_value=cache_path):
+        with patch(
+            "openhands.sdk.plugin.fetch.get_cache_path", return_value=cache_path
+        ):
             result = Plugin.fetch("github:owner/repo", cache_dir=tmp_path, update=False)
 
         assert result == cache_path
