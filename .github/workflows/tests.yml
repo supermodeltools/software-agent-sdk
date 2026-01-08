@@ -56,25 +56,13 @@ jobs:
               if: steps.changed.outputs.any_changed == 'true'
               run: |
                   # Clean up any existing coverage file
-                  rm -f .coverage .coverage.*
-                  # Run tests that need process isolation with --forked
-                  # (pytest-forked doesn't combine coverage properly, so we run these separately)
+                  rm -f .coverage
                   CI=true uv run python -m pytest -vvs \
                     --forked \
                     --cov=openhands-sdk \
                     --cov-report=term-missing \
                     --cov-fail-under=0 \
                     --cov-config=pyproject.toml \
-                    -m "forked" \
-                    tests/sdk || true
-                  # Run remaining tests without forking for accurate coverage
-                  CI=true uv run python -m pytest -vvs \
-                    --cov=openhands-sdk \
-                    --cov-report=term-missing \
-                    --cov-fail-under=0 \
-                    --cov-config=pyproject.toml \
-                    --cov-append \
-                    -m "not forked" \
                     tests/sdk
                   # Rename coverage file for upload
                   if [ -f .coverage ]; then
