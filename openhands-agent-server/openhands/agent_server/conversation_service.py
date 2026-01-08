@@ -20,7 +20,7 @@ from openhands.agent_server.models import (
 from openhands.agent_server.pub_sub import Subscriber
 from openhands.agent_server.server_details_router import update_last_execution_time
 from openhands.agent_server.utils import safe_rmtree, utc_now
-from openhands.sdk import LLM, Agent, AgentContext, Event, Message
+from openhands.sdk import LLM, AgentContext, Event, Message
 from openhands.sdk.conversation.state import (
     ConversationExecutionStatus,
     ConversationState,
@@ -298,9 +298,7 @@ class ConversationService:
             # Plugin MCP config is merged, with plugin values taking precedence
             merged_mcp = {**existing_mcp, **plugin.mcp_config}
             updates["mcp_config"] = merged_mcp
-            logger.info(
-                f"Merged plugin MCP config ({len(plugin.mcp_config)} entries)"
-            )
+            logger.info(f"Merged plugin MCP config ({len(plugin.mcp_config)} entries)")
 
         # TODO: Handle plugin.hooks registration
         # Hooks require integration with the event service, which is more complex.
