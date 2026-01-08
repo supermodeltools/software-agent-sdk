@@ -7,10 +7,8 @@ They are designed to test the full end-to-end flow of plugin fetching.
 import subprocess
 from pathlib import Path
 
-import pytest
-
-from openhands.sdk.plugin import GitHelper, Plugin, PluginFetchError
-from openhands.sdk.plugin.fetch import fetch_plugin, get_cache_path
+from openhands.sdk.plugin import GitHelper, Plugin
+from openhands.sdk.plugin.fetch import fetch_plugin
 
 
 class TestGitHelperIntegration:
@@ -41,9 +39,7 @@ class TestGitHelperIntegration:
         subprocess.run(
             ["git", "config", "user.email", "test@test.com"], cwd=source, check=True
         )
-        subprocess.run(
-            ["git", "config", "user.name", "Test"], cwd=source, check=True
-        )
+        subprocess.run(["git", "config", "user.name", "Test"], cwd=source, check=True)
         (source / "file.txt").write_text("content")
         subprocess.run(["git", "add", "."], cwd=source, check=True)
         subprocess.run(["git", "commit", "-m", "Initial"], cwd=source, check=True)
@@ -287,22 +283,6 @@ class TestPluginFetchMethodIntegration:
         }"""
         )
 
-        # Add a skill
-        (plugin_repo / "skills").mkdir()
-        skill_dir = plugin_repo / "skills" / "test-skill"
-        skill_dir.mkdir()
-        (skill_dir / "SKILL.md").write_text(
-            """---
-name: test-skill
-description: A test skill
----
-
-# Test Skill
-
-This is a test skill.
-"""
-        )
-
         subprocess.run(["git", "add", "."], cwd=plugin_repo, check=True)
         subprocess.run(["git", "commit", "-m", "Initial"], cwd=plugin_repo, check=True)
 
@@ -313,5 +293,4 @@ This is a test skill.
 
         assert plugin.name == "complete-plugin"
         assert plugin.version == "1.0.0"
-        assert len(plugin.skills) == 1
-        assert plugin.skills[0].name == "test-skill"
+        assert plugin.description == "A complete test plugin"

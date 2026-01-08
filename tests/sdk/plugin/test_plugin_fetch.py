@@ -1,5 +1,6 @@
 """Tests for Plugin.fetch() functionality."""
 
+import subprocess
 from pathlib import Path
 from unittest.mock import create_autospec, patch
 
@@ -19,6 +20,8 @@ from openhands.sdk.plugin.fetch import (
     _update_repository,
     fetch_plugin,
     get_cache_path,
+    get_git_helper,
+    set_git_helper,
 )
 
 
@@ -431,3 +434,213 @@ class TestPluginFetchMethod:
         with patch("openhands.sdk.plugin.fetch.Path.home", return_value=tmp_path):
             result = Plugin.fetch(str(plugin_dir))
             assert result.exists()
+
+
+class TestSetGitHelper:
+    """Tests for set_git_helper and get_git_helper functions."""
+
+    def test_set_and_get_git_helper(self):
+        """Test setting and getting a custom GitHelper instance."""
+        # Save original
+        original = get_git_helper()
+
+        try:
+            # Set a custom helper
+            custom_helper = GitHelper()
+            set_git_helper(custom_helper)
+            assert get_git_helper() is custom_helper
+
+            # Reset to None to test lazy initialization
+            set_git_helper(None)
+            # Next get should create a new instance
+            new_helper = get_git_helper()
+            assert new_helper is not None
+            assert new_helper is not custom_helper
+        finally:
+            # Restore original
+            set_git_helper(original)
+
+
+class TestParsePluginSourceEdgeCases:
+    """Additional edge case tests for parse_plugin_source."""
+
+    def test_relative_path_with_slash(self):
+        """Test parsing paths like 'plugins/my-plugin' (line 108)."""
+        source_type, url = parse_plugin_source("plugins/my-plugin")
+        assert source_type == "local"
+        assert url == "plugins/my-plugin"
+
+    def test_nested_relative_path(self):
+        """Test parsing nested relative paths."""
+        source_type, url = parse_plugin_source("path/to/my/plugin")
+        assert source_type == "local"
+        assert url == "path/to/my/plugin"
+
+
+class TestFetchPluginEdgeCases:
+    """Additional edge case tests for fetch_plugin."""
+
+    def test_fetch_uses_default_cache_dir(self, tmp_path: Path):
+        """Test fetch_plugin uses DEFAULT_CACHE_DIR when cache_dir is None."""
+        mock_git = create_autospec(GitHelper)
+
+        def clone_side_effect(url, dest, **kwargs):
+            dest.mkdir(parents=True, exist_ok=True)
+            (dest / ".git").mkdir()
+
+        mock_git.clone.side_effect = clone_side_effect
+
+        # Patch DEFAULT_CACHE_DIR to use tmp_path
+        with patch("openhands.sdk.plugin.fetch.DEFAULT_CACHE_DIR", tmp_path / "cache"):
+            result = fetch_plugin(
+                "github:owner/repo",
+                cache_dir=None,  # Explicitly None to trigger line 225
+                git_helper=mock_git,
+            )
+
+        assert result.exists()
+        assert str(tmp_path / "cache") in str(result)
+
+    def test_fetch_reraises_plugin_fetch_error(self, tmp_path: Path):
+        """Test that PluginFetchError is re-raised directly (line 248)."""
+        mock_git = create_autospec(GitHelper)
+
+        # Make clone raise PluginFetchError to test the re-raise path
+        mock_git.clone.side_effect = PluginFetchError("Test error from clone")
+
+        # This should re-raise the PluginFetchError directly
+        with pytest.raises(PluginFetchError, match="Test error from clone"):
+            fetch_plugin(
+                "github:owner/repo",
+                cache_dir=tmp_path,
+                git_helper=mock_git,
+            )
+
+
+class TestGitHelperErrors:
+    """Tests for GitHelper error handling paths."""
+
+    def test_clone_called_process_error(self, tmp_path: Path):
+        """Test clone handles CalledProcessError (lines 62-64)."""
+        git = GitHelper()
+        dest = tmp_path / "repo"
+
+        # Try to clone a non-existent repo
+        with pytest.raises(GitError, match="Clone failed"):
+            git.clone("https://invalid.example.com/nonexistent.git", dest, timeout=5)
+
+    def test_clone_timeout(self, tmp_path: Path):
+        """Test clone handles TimeoutExpired (lines 65-66)."""
+        git = GitHelper()
+        dest = tmp_path / "repo"
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.side_effect = subprocess.TimeoutExpired(cmd=["git"], timeout=1)
+            with pytest.raises(GitError, match="timed out"):
+                git.clone("https://github.com/owner/repo.git", dest, timeout=1)
+
+    def test_fetch_with_ref(self, tmp_path: Path):
+        """Test fetch appends ref to command (line 88)."""
+        # Create a repo to fetch in
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        subprocess.run(["git", "init"], cwd=repo, check=True)
+        subprocess.run(
+            ["git", "config", "user.email", "test@test.com"], cwd=repo, check=True
+        )
+        subprocess.run(["git", "config", "user.name", "Test"], cwd=repo, check=True)
+        (repo / "file.txt").write_text("content")
+        subprocess.run(["git", "add", "."], cwd=repo, check=True)
+        subprocess.run(["git", "commit", "-m", "Initial"], cwd=repo, check=True)
+
+        git = GitHelper()
+        # This will fail because there's no remote, but it will hit line 88
+        with pytest.raises(GitError, match="Fetch failed"):
+            git.fetch(repo, ref="main")
+
+    def test_fetch_called_process_error(self, tmp_path: Path):
+        """Test fetch handles CalledProcessError (lines 100-102)."""
+        git = GitHelper()
+        repo = tmp_path / "not-a-repo"
+        repo.mkdir()
+
+        with pytest.raises(GitError, match="Fetch failed"):
+            git.fetch(repo)
+
+    def test_fetch_timeout(self, tmp_path: Path):
+        """Test fetch handles TimeoutExpired (lines 103-104)."""
+        git = GitHelper()
+        repo = tmp_path / "repo"
+        repo.mkdir()
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.side_effect = subprocess.TimeoutExpired(cmd=["git"], timeout=1)
+            with pytest.raises(GitError, match="timed out"):
+                git.fetch(repo, timeout=1)
+
+    def test_checkout_called_process_error(self, tmp_path: Path):
+        """Test checkout handles CalledProcessError (lines 129-131)."""
+        git = GitHelper()
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        subprocess.run(["git", "init"], cwd=repo, check=True)
+
+        with pytest.raises(GitError, match="Checkout failed"):
+            git.checkout(repo, "nonexistent-ref")
+
+    def test_checkout_timeout(self, tmp_path: Path):
+        """Test checkout handles TimeoutExpired (lines 132-133)."""
+        git = GitHelper()
+        repo = tmp_path / "repo"
+        repo.mkdir()
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.side_effect = subprocess.TimeoutExpired(cmd=["git"], timeout=1)
+            with pytest.raises(GitError, match="timed out"):
+                git.checkout(repo, "main", timeout=1)
+
+    def test_reset_hard_called_process_error(self, tmp_path: Path):
+        """Test reset_hard handles CalledProcessError (lines 158-160)."""
+        git = GitHelper()
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        subprocess.run(["git", "init"], cwd=repo, check=True)
+
+        with pytest.raises(GitError, match="Reset failed"):
+            git.reset_hard(repo, "nonexistent-ref")
+
+    def test_reset_hard_timeout(self, tmp_path: Path):
+        """Test reset_hard handles TimeoutExpired (lines 161-162)."""
+        git = GitHelper()
+        repo = tmp_path / "repo"
+        repo.mkdir()
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.side_effect = subprocess.TimeoutExpired(cmd=["git"], timeout=1)
+            with pytest.raises(GitError, match="timed out"):
+                git.reset_hard(repo, "HEAD", timeout=1)
+
+    def test_get_current_branch_called_process_error(self, tmp_path: Path):
+        """Test get_current_branch handles CalledProcessError (lines 192-194)."""
+        git = GitHelper()
+        repo = tmp_path / "repo"
+        repo.mkdir()
+
+        # Mock subprocess.run to raise CalledProcessError
+        with patch("subprocess.run") as mock_run:
+            mock_run.side_effect = subprocess.CalledProcessError(
+                returncode=1, cmd=["git"], stderr="fatal: not a git repository"
+            )
+            with pytest.raises(GitError, match="Failed to get current branch"):
+                git.get_current_branch(repo)
+
+    def test_get_current_branch_timeout(self, tmp_path: Path):
+        """Test get_current_branch handles TimeoutExpired (lines 195-196)."""
+        git = GitHelper()
+        repo = tmp_path / "repo"
+        repo.mkdir()
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.side_effect = subprocess.TimeoutExpired(cmd=["git"], timeout=1)
+            with pytest.raises(GitError, match="timed out"):
+                git.get_current_branch(repo, timeout=1)
