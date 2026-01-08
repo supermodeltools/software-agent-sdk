@@ -250,9 +250,7 @@ def fetch_plugin(
         raise PluginFetchError(f"Failed to fetch plugin from {source}: {e}") from e
 
 
-def _clone_repository(
-    url: str, dest: Path, ref: str | None, git: GitHelper
-) -> None:
+def _clone_repository(url: str, dest: Path, ref: str | None, git: GitHelper) -> None:
     """Clone a git repository.
 
     Args:
@@ -299,7 +297,9 @@ def _update_repository(repo_path: Path, ref: str | None, git: GitHelper) -> None
         logger.debug("Plugin repository updated successfully")
 
     except GitError as e:
-        logger.warning(f"Failed to update repository: {e}, using existing cached version")
+        logger.warning(
+            f"Failed to update repository: {e}, using existing cached version"
+        )
 
 
 def _checkout_ref(repo_path: Path, ref: str, git: GitHelper) -> None:
