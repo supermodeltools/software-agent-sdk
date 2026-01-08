@@ -9,7 +9,6 @@ tests/sdk/context/view/test_view_batch_atomicity.py. These tests will eventually
 be removed once we're satisfied with the property-level tests.
 """
 
-from openhands.sdk.context.view.event_mappings import EventMappings
 from openhands.sdk.context.view.properties.batch_atomicity import (
     BatchAtomicityProperty,
 )

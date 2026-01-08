@@ -83,3 +83,49 @@ class ViewPropertyBase(ABC):
             Dictionary mapping event ID to index in the list
         """
         return {event.id: idx for idx, event in enumerate(events)}
+
+    @staticmethod
+    def _get_batch_extent(
+        action_ids: list[EventID],
+        event_id_to_index: dict[EventID, int],
+    ) -> tuple[int, int]:
+        """Get the min and max indices for a batch of action IDs.
+
+        Args:
+            action_ids: List of ActionEvent IDs in the batch
+            event_id_to_index: Mapping of event IDs to indices
+
+        Returns:
+            Tuple of (min_index, max_index) for the batch
+        """
+        indices = [event_id_to_index[aid] for aid in action_ids]
+        return min(indices), max(indices)
+
+    @staticmethod
+    def _build_manipulation_indices_from_atomic_ranges(
+        atomic_ranges: list[tuple[int, int]],
+        num_events: int,
+    ) -> ManipulationIndices:
+        """Build ManipulationIndices that exclude indices within atomic ranges.
+
+        Atomic ranges represent contiguous sequences of events that must remain together.
+        This method creates a set of valid manipulation indices that excludes all indices
+        that fall within these atomic ranges.
+
+        Args:
+            atomic_ranges: List of (start_idx, end_idx) tuples defining atomic ranges
+            num_events: Total number of events in the view
+
+        Returns:
+            ManipulationIndices with valid indices (excluding those within atomic ranges)
+        """
+        # Start with all possible indices (including after the last event)
+        valid_indices = set(range(num_events + 1))
+
+        # Remove indices that fall within atomic ranges
+        for start_idx, end_idx in atomic_ranges:
+            # Cannot insert/remove within the atomic range (exclusive of start boundary)
+            for idx in range(start_idx + 1, end_idx + 1):
+                valid_indices.discard(idx)
+
+        return ManipulationIndices(valid_indices)

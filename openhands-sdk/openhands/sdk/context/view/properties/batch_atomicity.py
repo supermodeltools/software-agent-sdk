@@ -79,9 +79,7 @@ class BatchAtomicityProperty(ViewPropertyBase):
 
         for llm_response_id, action_ids in batches.items():
             # Get indices for all actions in this batch
-            indices = [event_id_to_index[aid] for aid in action_ids]
-            min_idx = min(indices)
-            max_idx = max(indices)
+            min_idx, max_idx = self._get_batch_extent(action_ids, event_id_to_index)
 
             # Extend max_idx to include all corresponding observations
             for action_id in action_ids:
@@ -93,14 +91,7 @@ class BatchAtomicityProperty(ViewPropertyBase):
 
             atomic_ranges.append((min_idx, max_idx))
 
-        # Build set of all valid manipulation indices
-        # We can manipulate at any index not inside an atomic range
-        valid_indices = set(range(len(current_view_events) + 1))
-
-        # Remove indices that fall within atomic ranges
-        for min_idx, max_idx in atomic_ranges:
-            # Cannot insert/remove between min_idx and max_idx (exclusive of boundaries)
-            for idx in range(min_idx + 1, max_idx + 1):
-                valid_indices.discard(idx)
-
-        return ManipulationIndices(valid_indices)
+        # Build manipulation indices that exclude atomic ranges
+        return self._build_manipulation_indices_from_atomic_ranges(
+            atomic_ranges, len(current_view_events)
+        )

@@ -18,23 +18,27 @@ class ToolLoopAtomicityProperty(ViewPropertyBase):
     - Terminated by the first non-ActionEvent/ObservationEvent
     """
 
-    def _identify_tool_loops(self, events: list[Event]) -> list[list[EventID]]:
-        """Identify all tool loops in the event sequence.
+    def _build_batch_ranges(
+        self,
+        batches: dict[EventID, list[EventID]],
+        events: list[Event],
+        event_id_to_index: dict[EventID, int],
+    ) -> list[tuple[int, int, bool, list[EventID]]]:
+        """Build batch range metadata for tool loop detection.
+
+        Args:
+            batches: Mapping of llm_response_id to action event IDs
+            events: Event sequence to analyze
+            event_id_to_index: Mapping of event IDs to their indices
 
         Returns:
-            List of tool loops, where each tool loop is a list of EventIDs
+            List of tuples (min_idx, max_idx, has_thinking, action_ids) sorted by min_idx
         """
-        batches = self._build_batches(events)
-        event_id_to_index = self._build_event_id_to_index(events)
-
-        # Build batch ranges with metadata
         batch_ranges: list[tuple[int, int, bool, list[EventID]]] = []
 
         for llm_response_id, action_ids in batches.items():
             # Get indices for all actions in this batch
-            indices = [event_id_to_index[aid] for aid in action_ids]
-            min_idx = min(indices)
-            max_idx = max(indices)
+            min_idx, max_idx = self._get_batch_extent(action_ids, event_id_to_index)
 
             # Check if any action in this batch has thinking blocks
             has_thinking = False
@@ -49,64 +53,105 @@ class ToolLoopAtomicityProperty(ViewPropertyBase):
 
         # Sort batch ranges by min_idx
         batch_ranges.sort(key=lambda x: x[0])
+        return batch_ranges
+
+    def _scan_tool_loop_extent(
+        self,
+        start_idx: int,
+        batch_ranges: list[tuple[int, int, bool, list[EventID]]],
+        events: list[Event],
+    ) -> tuple[int, int, int]:
+        """Scan forward from a starting batch to find the full extent of a tool loop.
+
+        Args:
+            start_idx: Index in batch_ranges where the tool loop starts (must have has_thinking=True)
+            batch_ranges: Sorted list of batch range tuples
+            events: Event sequence being analyzed
+
+        Returns:
+            Tuple of (loop_start_event_idx, loop_end_event_idx, next_batch_idx)
+            - loop_start_event_idx: Index of first event in the tool loop
+            - loop_end_event_idx: Index of last event in the tool loop
+            - next_batch_idx: Index in batch_ranges after this loop ends
+        """
+        min_idx, max_idx, has_thinking, _ = batch_ranges[start_idx]
+
+        if not has_thinking:
+            raise ValueError("Tool loop must start with a batch containing thinking blocks")
+
+        loop_start = min_idx
+        loop_end = max_idx
+
+        # Scan forward through consecutive action/observation batches
+        j = start_idx + 1
+        while j < len(batch_ranges):
+            next_min, next_max, _, _ = batch_ranges[j]
+
+            # Check if there are only ActionEvents/ObservationEvents between
+            # current loop_end and next_min
+            all_action_or_obs = True
+            for idx in range(loop_end + 1, next_min):
+                event = events[idx]
+                if not isinstance(event, (ActionEvent, ObservationBaseEvent)):
+                    all_action_or_obs = False
+                    break
+
+            if all_action_or_obs:
+                # Extend the tool loop
+                loop_end = next_max
+                j += 1
+            else:
+                # Tool loop ends here
+                break
+
+        # Scan forward to include any trailing observations
+        scan_idx = loop_end + 1
+        while scan_idx < len(events):
+            event = events[scan_idx]
+            if isinstance(event, ObservationBaseEvent):
+                loop_end = scan_idx
+                scan_idx += 1
+            elif isinstance(event, ActionEvent):
+                # Another action - should have been caught by batch processing above
+                break
+            else:
+                # Non-action/observation terminates the loop
+                break
+
+        return loop_start, loop_end, j
+
+    def _identify_tool_loops(self, events: list[Event]) -> list[list[EventID]]:
+        """Identify all tool loops in the event sequence.
+
+        Returns:
+            List of tool loops, where each tool loop is a list of EventIDs
+        """
+        batches = self._build_batches(events)
+        event_id_to_index = self._build_event_id_to_index(events)
+
+        # Build batch ranges with metadata using helper
+        batch_ranges = self._build_batch_ranges(batches, events, event_id_to_index)
 
         # Identify tool loops
         tool_loops: list[list[EventID]] = []
 
         i = 0
         while i < len(batch_ranges):
-            min_idx, max_idx, has_thinking, action_ids = batch_ranges[i]
+            _, _, has_thinking, action_ids = batch_ranges[i]
 
             if has_thinking:
-                # Start of a tool loop - collect all event IDs in this loop
-                loop_event_ids: list[EventID] = list(action_ids)
-                loop_end = max_idx
+                # Use helper to find the full extent of this tool loop
+                loop_start, loop_end, next_i = self._scan_tool_loop_extent(
+                    i, batch_ranges, events
+                )
 
-                # Collect observation events between batches
-                j = i + 1
-                while j < len(batch_ranges):
-                    next_min, next_max, _, next_action_ids = batch_ranges[j]
-
-                    # Check if there are only ActionEvents/ObservationEvents between
-                    all_action_or_obs = True
-                    intermediate_ids: list[EventID] = []
-
-                    for idx in range(loop_end + 1, next_min):
-                        event = events[idx]
-                        if isinstance(event, (ActionEvent, ObservationBaseEvent)):
-                            intermediate_ids.append(event.id)
-                        else:
-                            all_action_or_obs = False
-                            break
-
-                    if all_action_or_obs:
-                        # Extend the tool loop
-                        loop_event_ids.extend(intermediate_ids)
-                        loop_event_ids.extend(next_action_ids)
-                        loop_end = next_max
-                        j += 1
-                    else:
-                        # Tool loop ends here
-                        break
-
-                # Collect any trailing observation events after the last batch
-                scan_idx = loop_end + 1
-                while scan_idx < len(events):
-                    event = events[scan_idx]
-                    if isinstance(event, ObservationBaseEvent):
-                        loop_event_ids.append(event.id)
-                        loop_end = scan_idx
-                        scan_idx += 1
-                    elif isinstance(event, ActionEvent):
-                        # Another action batch - shouldn't happen as we already
-                        # processed all batches above
-                        break
-                    else:
-                        # Non-action/observation terminates the loop
-                        break
+                # Collect all event IDs within the loop range
+                loop_event_ids: list[EventID] = []
+                for idx in range(loop_start, loop_end + 1):
+                    loop_event_ids.append(events[idx].id)
 
                 tool_loops.append(loop_event_ids)
-                i = j
+                i = next_i
             else:
                 i += 1
 
@@ -164,91 +209,29 @@ class ToolLoopAtomicityProperty(ViewPropertyBase):
         batches = self._build_batches(current_view_events)
         event_id_to_index = self._build_event_id_to_index(current_view_events)
 
-        # Build batch ranges with metadata
-        batch_ranges: list[tuple[int, int, bool]] = []
-
-        for llm_response_id, action_ids in batches.items():
-            # Get indices for all actions in this batch
-            indices = [event_id_to_index[aid] for aid in action_ids]
-            min_idx = min(indices)
-            max_idx = max(indices)
-
-            # Check if any action in this batch has thinking blocks
-            has_thinking = False
-            for action_id in action_ids:
-                idx = event_id_to_index[action_id]
-                event = current_view_events[idx]
-                if isinstance(event, ActionEvent) and event.thinking_blocks:
-                    has_thinking = True
-                    break
-
-            batch_ranges.append((min_idx, max_idx, has_thinking))
-
-        # Sort batch ranges by min_idx
-        batch_ranges.sort(key=lambda x: x[0])
+        # Build batch ranges with metadata using helper
+        batch_ranges = self._build_batch_ranges(
+            batches, current_view_events, event_id_to_index
+        )
 
         # Identify tool loop ranges
         tool_loop_ranges: list[tuple[int, int]] = []
 
         i = 0
         while i < len(batch_ranges):
-            min_idx, max_idx, has_thinking = batch_ranges[i]
+            _, _, has_thinking, _ = batch_ranges[i]
 
             if has_thinking:
-                # Start of a tool loop
-                loop_start = min_idx
-                loop_end = max_idx
-
-                # Scan forward through consecutive action/observation batches
-                j = i + 1
-                while j < len(batch_ranges):
-                    next_min, next_max, _ = batch_ranges[j]
-
-                    # Check if there are only ActionEvents/ObservationEvents between
-                    # current loop_end and next_min
-                    all_action_or_obs = True
-                    for idx in range(loop_end + 1, next_min):
-                        event = current_view_events[idx]
-                        if not isinstance(event, (ActionEvent, ObservationBaseEvent)):
-                            all_action_or_obs = False
-                            break
-
-                    if all_action_or_obs:
-                        # Extend the tool loop
-                        loop_end = next_max
-                        j += 1
-                    else:
-                        # Tool loop ends here
-                        break
-
-                # Scan forward to include any trailing observations
-                scan_idx = loop_end + 1
-                while scan_idx < len(current_view_events):
-                    event = current_view_events[scan_idx]
-                    if isinstance(event, ObservationBaseEvent):
-                        loop_end = scan_idx
-                        scan_idx += 1
-                    elif isinstance(event, ActionEvent):
-                        # Another action - should have been caught by batch
-                        # processing above
-                        break
-                    else:
-                        # Non-action/observation terminates the loop
-                        break
-
+                # Use helper to find the full extent of this tool loop
+                loop_start, loop_end, next_i = self._scan_tool_loop_extent(
+                    i, batch_ranges, current_view_events
+                )
                 tool_loop_ranges.append((loop_start, loop_end))
-                i = j
+                i = next_i
             else:
                 i += 1
 
-        # Build set of all valid manipulation indices
-        # We can manipulate at any index not inside a tool loop range
-        valid_indices = set(range(len(current_view_events) + 1))
-
-        # Remove indices that fall within tool loop ranges
-        for loop_start, loop_end in tool_loop_ranges:
-            # Cannot insert/remove within the tool loop (exclusive of start boundary)
-            for idx in range(loop_start + 1, loop_end + 1):
-                valid_indices.discard(idx)
-
-        return ManipulationIndices(valid_indices)
+        # Build manipulation indices that exclude tool loop ranges
+        return self._build_manipulation_indices_from_atomic_ranges(
+            tool_loop_ranges, len(current_view_events)
+        )

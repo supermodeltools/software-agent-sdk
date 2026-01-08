@@ -258,9 +258,9 @@ class View(BaseModel):
 
         # Define view properties for enforcement and manipulation indices
         properties = [
-            ToolCallMatchingProperty(),  # Match actions/observations first
-            BatchAtomicityProperty(),  # Then ensure batch atomicity
-            ToolLoopAtomicityProperty(),  # Finally ensure tool loop atomicity
+            ToolCallMatchingProperty(),
+            BatchAtomicityProperty(),
+            ToolLoopAtomicityProperty(),
         ]
 
         # Apply property enforcement to remove violations
