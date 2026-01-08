@@ -1445,7 +1445,8 @@ class TestPluginLoading:
 
         # Verify skills were merged correctly
         assert result.agent.agent_context is not None
-        assert len(result.agent.agent_context.skills) == 3  # existing + 2 plugin (1 override)
+        # existing + 2 plugin (1 override) = 3 skills
+        assert len(result.agent.agent_context.skills) == 3
 
         # Verify plugin skill overrode existing skill with same name
         skill_by_name = {s.name: s for s in result.agent.agent_context.skills}
