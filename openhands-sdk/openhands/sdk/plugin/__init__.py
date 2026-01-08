@@ -5,6 +5,7 @@ skills, hooks, MCP configurations, agents, and commands together.
 """
 
 from openhands.sdk.plugin.fetch import PluginFetchError, parse_plugin_source
+from openhands.sdk.plugin.git_helper import GitError, GitHelper
 from openhands.sdk.plugin.plugin import Plugin
 from openhands.sdk.plugin.types import (
     AgentDefinition,
@@ -22,4 +23,6 @@ __all__ = [
     "AgentDefinition",
     "CommandDefinition",
     "parse_plugin_source",
+    "GitHelper",
+    "GitError",
 ]

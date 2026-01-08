@@ -1,14 +1,23 @@
 """Tests for Plugin.fetch() functionality."""
 
-import subprocess
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import create_autospec, patch
 
 import pytest
 
-from openhands.sdk.plugin import Plugin, PluginFetchError, parse_plugin_source
+from openhands.sdk.plugin import (
+    GitError,
+    GitHelper,
+    Plugin,
+    PluginFetchError,
+    parse_plugin_source,
+)
 from openhands.sdk.plugin.fetch import (
+    _checkout_ref,
+    _clone_repository,
     _extract_readable_name,
+    _update_repository,
+    fetch_plugin,
     get_cache_path,
 )
 
@@ -169,176 +178,256 @@ class TestGetCachePath:
         assert "plugins" in str(path)
 
 
-class TestPluginFetch:
-    """Tests for Plugin.fetch() method."""
+class TestCloneRepository:
+    """Tests for _clone_repository function."""
+
+    def test_clone_calls_git_helper(self, tmp_path: Path):
+        """Test that clone delegates to GitHelper."""
+        mock_git = create_autospec(GitHelper)
+        dest = tmp_path / "repo"
+
+        _clone_repository("https://github.com/owner/repo.git", dest, None, mock_git)
+
+        mock_git.clone.assert_called_once_with(
+            "https://github.com/owner/repo.git", dest, depth=1, branch=None
+        )
+
+    def test_clone_with_ref(self, tmp_path: Path):
+        """Test clone with branch/tag ref."""
+        mock_git = create_autospec(GitHelper)
+        dest = tmp_path / "repo"
+
+        _clone_repository("https://github.com/owner/repo.git", dest, "v1.0.0", mock_git)
+
+        mock_git.clone.assert_called_once_with(
+            "https://github.com/owner/repo.git", dest, depth=1, branch="v1.0.0"
+        )
+
+    def test_clone_removes_existing_directory(self, tmp_path: Path):
+        """Test that existing non-git directory is removed."""
+        mock_git = create_autospec(GitHelper)
+        dest = tmp_path / "repo"
+        dest.mkdir()
+        (dest / "some_file.txt").write_text("test")
+
+        _clone_repository("https://github.com/owner/repo.git", dest, None, mock_git)
+
+        mock_git.clone.assert_called_once()
+
+
+class TestUpdateRepository:
+    """Tests for _update_repository function."""
+
+    def test_update_fetches_and_resets(self, tmp_path: Path):
+        """Test update fetches from origin and resets to branch."""
+        mock_git = create_autospec(GitHelper)
+        mock_git.get_current_branch.return_value = "main"
+
+        _update_repository(tmp_path, None, mock_git)
+
+        mock_git.fetch.assert_called_once_with(tmp_path)
+        mock_git.get_current_branch.assert_called_once_with(tmp_path)
+        mock_git.reset_hard.assert_called_once_with(tmp_path, "origin/main")
+
+    def test_update_with_ref_checks_out(self, tmp_path: Path):
+        """Test update with ref checks out that ref."""
+        mock_git = create_autospec(GitHelper)
+
+        _update_repository(tmp_path, "v1.0.0", mock_git)
+
+        # fetch is called twice: once in _update_repository, once in _checkout_ref
+        assert mock_git.fetch.call_count == 2
+        mock_git.checkout.assert_called_once_with(tmp_path, "v1.0.0")
+
+    def test_update_handles_detached_head(self, tmp_path: Path):
+        """Test update handles detached HEAD state (no reset)."""
+        mock_git = create_autospec(GitHelper)
+        mock_git.get_current_branch.return_value = None
+
+        _update_repository(tmp_path, None, mock_git)
+
+        mock_git.fetch.assert_called_once()
+        mock_git.reset_hard.assert_not_called()
+
+    def test_update_handles_git_error(self, tmp_path: Path):
+        """Test update continues on GitError (uses cached version)."""
+        mock_git = create_autospec(GitHelper)
+        mock_git.fetch.side_effect = GitError("Network error")
+
+        _update_repository(tmp_path, None, mock_git)
+
+
+class TestCheckoutRef:
+    """Tests for _checkout_ref function."""
+
+    def test_checkout_fetches_and_checks_out(self, tmp_path: Path):
+        """Test checkout fetches ref and checks out."""
+        mock_git = create_autospec(GitHelper)
+
+        _checkout_ref(tmp_path, "v1.0.0", mock_git)
+
+        mock_git.fetch.assert_called_once_with(tmp_path, ref="v1.0.0")
+        mock_git.checkout.assert_called_once_with(tmp_path, "v1.0.0")
+        mock_git.reset_hard.assert_called_once_with(tmp_path, "origin/v1.0.0")
+
+    def test_checkout_handles_fetch_error(self, tmp_path: Path):
+        """Test checkout continues if fetch fails (e.g., for commits)."""
+        mock_git = create_autospec(GitHelper)
+        mock_git.fetch.side_effect = GitError("Not a branch")
+
+        _checkout_ref(tmp_path, "abc123", mock_git)
+
+        mock_git.checkout.assert_called_once_with(tmp_path, "abc123")
+
+    def test_checkout_handles_reset_error(self, tmp_path: Path):
+        """Test checkout continues if reset fails (e.g., for tags)."""
+        mock_git = create_autospec(GitHelper)
+        mock_git.reset_hard.side_effect = GitError("Not a branch")
+
+        _checkout_ref(tmp_path, "v1.0.0", mock_git)
+
+        mock_git.checkout.assert_called_once()
+
+
+class TestFetchPlugin:
+    """Tests for fetch_plugin function."""
 
     def test_fetch_local_path(self, tmp_path: Path):
         """Test fetching from local path returns the path unchanged."""
         plugin_dir = tmp_path / "my-plugin"
         plugin_dir.mkdir()
 
-        result = Plugin.fetch(str(plugin_dir))
+        result = fetch_plugin(str(plugin_dir))
         assert result == plugin_dir.resolve()
 
     def test_fetch_local_path_nonexistent(self, tmp_path: Path):
         """Test fetching nonexistent local path raises error."""
         with pytest.raises(PluginFetchError, match="does not exist"):
-            Plugin.fetch(str(tmp_path / "nonexistent"))
+            fetch_plugin(str(tmp_path / "nonexistent"))
 
-    def test_fetch_local_path_with_tilde(self, tmp_path: Path):
-        """Test fetching local path with ~ expansion."""
-        # Create a plugin in a subdirectory
+    def test_fetch_github_shorthand_clones(self, tmp_path: Path):
+        """Test fetching GitHub shorthand clones the repository."""
+        mock_git = create_autospec(GitHelper)
+
+        def clone_side_effect(url, dest, **kwargs):
+            dest.mkdir(parents=True, exist_ok=True)
+            (dest / ".git").mkdir()
+
+        mock_git.clone.side_effect = clone_side_effect
+
+        result = fetch_plugin(
+            "github:owner/repo", cache_dir=tmp_path, git_helper=mock_git
+        )
+
+        assert result.exists()
+        mock_git.clone.assert_called_once()
+        call_args = mock_git.clone.call_args
+        assert call_args[0][0] == "https://github.com/owner/repo.git"
+
+    def test_fetch_with_ref(self, tmp_path: Path):
+        """Test fetching with specific ref."""
+        mock_git = create_autospec(GitHelper)
+
+        def clone_side_effect(url, dest, **kwargs):
+            dest.mkdir(parents=True, exist_ok=True)
+            (dest / ".git").mkdir()
+
+        mock_git.clone.side_effect = clone_side_effect
+
+        fetch_plugin(
+            "github:owner/repo", cache_dir=tmp_path, ref="v1.0.0", git_helper=mock_git
+        )
+
+        mock_git.clone.assert_called_once()
+        call_kwargs = mock_git.clone.call_args[1]
+        assert call_kwargs["branch"] == "v1.0.0"
+
+    def test_fetch_updates_existing_cache(self, tmp_path: Path):
+        """Test that fetch updates existing cached repository."""
+        mock_git = create_autospec(GitHelper)
+        mock_git.get_current_branch.return_value = "main"
+
+        cache_path = get_cache_path("https://github.com/owner/repo.git", tmp_path)
+        cache_path.mkdir(parents=True)
+        (cache_path / ".git").mkdir()
+
+        result = fetch_plugin(
+            "github:owner/repo", cache_dir=tmp_path, update=True, git_helper=mock_git
+        )
+
+        assert result == cache_path
+        mock_git.fetch.assert_called()
+        mock_git.clone.assert_not_called()
+
+    def test_fetch_no_update_uses_cache(self, tmp_path: Path):
+        """Test that fetch with update=False uses cached version."""
+        mock_git = create_autospec(GitHelper)
+
+        cache_path = get_cache_path("https://github.com/owner/repo.git", tmp_path)
+        cache_path.mkdir(parents=True)
+        (cache_path / ".git").mkdir()
+
+        result = fetch_plugin(
+            "github:owner/repo", cache_dir=tmp_path, update=False, git_helper=mock_git
+        )
+
+        assert result == cache_path
+        mock_git.clone.assert_not_called()
+        mock_git.fetch.assert_not_called()
+
+    def test_fetch_no_update_with_ref_checks_out(self, tmp_path: Path):
+        """Test that fetch with update=False but ref still checks out."""
+        mock_git = create_autospec(GitHelper)
+
+        cache_path = get_cache_path("https://github.com/owner/repo.git", tmp_path)
+        cache_path.mkdir(parents=True)
+        (cache_path / ".git").mkdir()
+
+        fetch_plugin(
+            "github:owner/repo",
+            cache_dir=tmp_path,
+            update=False,
+            ref="v1.0.0",
+            git_helper=mock_git,
+        )
+
+        mock_git.checkout.assert_called_once_with(cache_path, "v1.0.0")
+
+    def test_fetch_git_error_raises_plugin_fetch_error(self, tmp_path: Path):
+        """Test that git errors are wrapped in PluginFetchError."""
+        mock_git = create_autospec(GitHelper)
+        mock_git.clone.side_effect = GitError("fatal: repository not found")
+
+        with pytest.raises(PluginFetchError, match="Git operation failed"):
+            fetch_plugin(
+                "github:owner/nonexistent", cache_dir=tmp_path, git_helper=mock_git
+            )
+
+    def test_fetch_generic_error_wrapped(self, tmp_path: Path):
+        """Test that generic errors are wrapped in PluginFetchError."""
+        mock_git = create_autospec(GitHelper)
+        mock_git.clone.side_effect = RuntimeError("Unexpected error")
+
+        with pytest.raises(PluginFetchError, match="Failed to fetch plugin"):
+            fetch_plugin("github:owner/repo", cache_dir=tmp_path, git_helper=mock_git)
+
+
+class TestPluginFetchMethod:
+    """Tests for Plugin.fetch() classmethod."""
+
+    def test_fetch_delegates_to_fetch_plugin(self, tmp_path: Path):
+        """Test that Plugin.fetch() delegates to fetch_plugin."""
         plugin_dir = tmp_path / "my-plugin"
         plugin_dir.mkdir()
 
-        # Mock Path.home() to return tmp_path
+        result = Plugin.fetch(str(plugin_dir))
+        assert result == plugin_dir.resolve()
+
+    def test_fetch_local_path_with_tilde(self, tmp_path: Path):
+        """Test fetching local path with ~ expansion."""
+        plugin_dir = tmp_path / "my-plugin"
+        plugin_dir.mkdir()
+
         with patch("openhands.sdk.plugin.fetch.Path.home", return_value=tmp_path):
-            # This won't actually work with ~, but tests the path handling
             result = Plugin.fetch(str(plugin_dir))
             assert result.exists()
-
-    @patch("openhands.sdk.plugin.fetch.subprocess.run")
-    def test_fetch_github_shorthand_clones(self, mock_run: MagicMock, tmp_path: Path):
-        """Test fetching GitHub shorthand clones the repository."""
-        mock_run.return_value = MagicMock(returncode=0)
-
-        # Create a fake git repo after "clone"
-        def side_effect(*args, **kwargs):
-            cmd = args[0]
-            if "clone" in cmd:
-                # Get destination from command
-                dest = Path(cmd[-1])
-                dest.mkdir(parents=True, exist_ok=True)
-                (dest / ".git").mkdir()
-            return MagicMock(returncode=0, stdout=b"", stderr=b"")
-
-        mock_run.side_effect = side_effect
-
-        result = Plugin.fetch("github:owner/repo", cache_dir=tmp_path)
-
-        assert result.exists()
-        assert (result / ".git").exists()
-
-        # Verify git clone was called
-        clone_calls = [c for c in mock_run.call_args_list if "clone" in c[0][0]]
-        assert len(clone_calls) == 1
-        assert "https://github.com/owner/repo.git" in clone_calls[0][0][0]
-
-    @patch("openhands.sdk.plugin.fetch.subprocess.run")
-    def test_fetch_with_ref(self, mock_run: MagicMock, tmp_path: Path):
-        """Test fetching with specific ref."""
-        mock_run.return_value = MagicMock(returncode=0, stdout=b"", stderr=b"")
-
-        def side_effect(*args, **kwargs):
-            cmd = args[0]
-            if "clone" in cmd:
-                dest = Path(cmd[-1])
-                dest.mkdir(parents=True, exist_ok=True)
-                (dest / ".git").mkdir()
-            return MagicMock(returncode=0, stdout=b"main\n", stderr=b"")
-
-        mock_run.side_effect = side_effect
-
-        Plugin.fetch("github:owner/repo", cache_dir=tmp_path, ref="v1.0.0")
-
-        # Verify --branch was passed to clone
-        clone_calls = [c for c in mock_run.call_args_list if "clone" in c[0][0]]
-        assert len(clone_calls) == 1
-        clone_cmd = clone_calls[0][0][0]
-        assert "--branch" in clone_cmd
-        assert "v1.0.0" in clone_cmd
-
-    @patch("openhands.sdk.plugin.fetch.subprocess.run")
-    def test_fetch_updates_existing_cache(self, mock_run: MagicMock, tmp_path: Path):
-        """Test that fetch updates existing cached repository."""
-        # Create a fake existing repo
-        cache_path = tmp_path / "repo-12345678"
-        cache_path.mkdir()
-        (cache_path / ".git").mkdir()
-
-        mock_run.return_value = MagicMock(returncode=0, stdout=b"main\n", stderr=b"")
-
-        # Mock get_cache_path to return our fake path
-        with patch(
-            "openhands.sdk.plugin.fetch.get_cache_path", return_value=cache_path
-        ):
-            Plugin.fetch("github:owner/repo", cache_dir=tmp_path, update=True)
-
-        # Verify git fetch was called (not clone)
-        fetch_calls = [c for c in mock_run.call_args_list if "fetch" in c[0][0]]
-        assert len(fetch_calls) >= 1
-
-        clone_calls = [c for c in mock_run.call_args_list if "clone" in c[0][0]]
-        assert len(clone_calls) == 0
-
-    @patch("openhands.sdk.plugin.fetch.subprocess.run")
-    def test_fetch_no_update_uses_cache(self, mock_run: MagicMock, tmp_path: Path):
-        """Test that fetch with update=False uses cached version."""
-        # Create a fake existing repo
-        cache_path = tmp_path / "repo-12345678"
-        cache_path.mkdir()
-        (cache_path / ".git").mkdir()
-
-        mock_run.return_value = MagicMock(returncode=0, stdout=b"main\n", stderr=b"")
-
-        with patch(
-            "openhands.sdk.plugin.fetch.get_cache_path", return_value=cache_path
-        ):
-            result = Plugin.fetch("github:owner/repo", cache_dir=tmp_path, update=False)
-
-        assert result == cache_path
-
-        # Verify no git operations were performed
-        assert mock_run.call_count == 0
-
-    @patch("openhands.sdk.plugin.fetch.subprocess.run")
-    def test_fetch_git_error_raises_plugin_fetch_error(
-        self, mock_run: MagicMock, tmp_path: Path
-    ):
-        """Test that git errors are wrapped in PluginFetchError."""
-        mock_run.side_effect = subprocess.CalledProcessError(
-            1, "git", stderr=b"fatal: repository not found"
-        )
-
-        with pytest.raises(PluginFetchError, match="Git operation failed"):
-            Plugin.fetch("github:owner/nonexistent", cache_dir=tmp_path)
-
-    @patch("openhands.sdk.plugin.fetch.subprocess.run")
-    def test_fetch_timeout_raises_plugin_fetch_error(
-        self, mock_run: MagicMock, tmp_path: Path
-    ):
-        """Test that git timeout is wrapped in PluginFetchError."""
-        mock_run.side_effect = subprocess.TimeoutExpired("git", 60)
-
-        with pytest.raises(PluginFetchError, match="timed out"):
-            Plugin.fetch("github:owner/slow-repo", cache_dir=tmp_path)
-
-
-class TestPluginFetchIntegration:
-    """Integration tests that require network access.
-
-    These tests are marked with pytest.mark.integration and can be skipped
-    in CI environments without network access.
-    """
-
-    @pytest.mark.integration
-    def test_fetch_and_load_real_plugin(self, tmp_path: Path):
-        """Test fetching and loading a real plugin from GitHub.
-
-        This test requires network access and uses a public repository.
-        """
-        # Use a small public repo as test target
-        # Note: This should be a stable public repo that won't disappear
-        # For actual testing, you might want to use a dedicated test repo
-
-        # Skip if no network (CI environment check)
-        try:
-            import socket
-
-            socket.create_connection(("github.com", 443), timeout=5)
-        except OSError:
-            pytest.skip("No network access to GitHub")
-
-        # This is a placeholder - in real tests you'd use an actual test plugin repo
-        # For now we just verify the method signature works
-        pass
