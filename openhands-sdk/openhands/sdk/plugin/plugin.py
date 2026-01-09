@@ -84,6 +84,25 @@ class Plugin(BaseModel):
         """Get the plugin description."""
         return self.manifest.description
 
+    def get_all_skills(self) -> list[Skill]:
+        """Get all skills including those converted from commands.
+
+        Returns skills from both the skills/ directory and commands/ directory.
+        Commands are converted to keyword-triggered skills using the format
+        /<plugin-name>:<command-name>.
+
+        Returns:
+            Combined list of skills (original + command-derived skills).
+        """
+        all_skills = list(self.skills)
+
+        # Convert commands to skills with keyword triggers
+        for command in self.commands:
+            skill = command.to_skill(self.name)
+            all_skills.append(skill)
+
+        return all_skills
+
     @classmethod
     def fetch(
         cls,

@@ -252,6 +252,11 @@ class ConversationService:
     ) -> StartConversationRequest:
         """Merge plugin skills, hooks, and MCP config into the request.
 
+        This method merges both explicit skills from the skills/ directory
+        and command-derived skills from the commands/ directory. Commands
+        are converted to keyword-triggered skills using the Claude Code
+        namespacing format: /<plugin-name>:<command-name>
+
         Args:
             request: The original start conversation request
             plugin: The loaded plugin
@@ -262,15 +267,18 @@ class ConversationService:
         agent = request.agent
         updates: dict = {}
 
+        # Get all skills including those converted from commands
+        all_plugin_skills = plugin.get_all_skills()
+
         # Merge skills into agent context
-        if plugin.skills:
+        if all_plugin_skills:
             existing_context = agent.agent_context
             existing_skills = existing_context.skills if existing_context else []
 
             # Plugin skills are added with highest precedence (at the end)
             # Build a dict to deduplicate by name, with plugin skills winning
             skills_by_name = {s.name: s for s in existing_skills}
-            for plugin_skill in plugin.skills:
+            for plugin_skill in all_plugin_skills:
                 if plugin_skill.name in skills_by_name:
                     logger.debug(
                         f"Plugin skill '{plugin_skill.name}' overrides existing skill"
@@ -288,8 +296,9 @@ class ConversationService:
 
             updates["agent_context"] = new_context
             logger.info(
-                f"Merged {len(plugin.skills)} plugin skills into agent context "
-                f"(total: {len(merged_skills)})"
+                f"Merged {len(all_plugin_skills)} plugin skills "
+                f"({len(plugin.skills)} from skills/, {len(plugin.commands)} from commands/) "
+                f"into agent context (total: {len(merged_skills)})"
             )
 
         # Merge MCP config

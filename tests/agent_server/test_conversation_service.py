@@ -1505,6 +1505,113 @@ class TestPluginLoading:
         # mcp_config may default to {} in Agent, so check it wasn't modified from plugin
         # The key point is no plugin content was added
 
+    def test_merge_plugin_into_request_with_commands(self, conversation_service):
+        """Test merging plugin commands as keyword-triggered skills."""
+        from openhands.sdk.context.skills import Skill
+        from openhands.sdk.context.skills.trigger import KeywordTrigger
+        from openhands.sdk.plugin import Plugin
+        from openhands.sdk.plugin.types import CommandDefinition, PluginManifest
+
+        # Create a plugin with commands (no skills)
+        plugin_with_commands = Plugin(
+            manifest=PluginManifest(
+                name="city-weather",
+                version="1.0.0",
+                description="Weather plugin",
+            ),
+            path="/tmp/city-weather",
+            skills=[],
+            hooks=None,
+            mcp_config=None,
+            agents=[],
+            commands=[
+                CommandDefinition(
+                    name="now",
+                    description="Get current weather for a city",
+                    argument_hint="<city-name>",
+                    allowed_tools=["tavily_search"],
+                    content="Fetch the current weather.",
+                )
+            ],
+        )
+
+        request = StartConversationRequest(
+            agent=Agent(llm=LLM(model="gpt-4", usage_id="test-llm"), tools=[]),
+            workspace=LocalWorkspace(working_dir="/tmp/test"),
+        )
+
+        result = conversation_service._merge_plugin_into_request(
+            request, plugin_with_commands
+        )
+
+        # Verify command was converted to skill
+        assert result.agent.agent_context is not None
+        assert len(result.agent.agent_context.skills) == 1
+
+        skill = result.agent.agent_context.skills[0]
+        assert skill.name == "city-weather:now"
+        assert isinstance(skill.trigger, KeywordTrigger)
+        assert "/city-weather:now" in skill.trigger.keywords
+
+    def test_merge_plugin_into_request_with_skills_and_commands(
+        self, conversation_service
+    ):
+        """Test merging plugin with both skills and commands."""
+        from openhands.sdk.context.skills import Skill
+        from openhands.sdk.context.skills.trigger import KeywordTrigger
+        from openhands.sdk.plugin import Plugin
+        from openhands.sdk.plugin.types import CommandDefinition, PluginManifest
+
+        plugin = Plugin(
+            manifest=PluginManifest(
+                name="full-plugin",
+                version="1.0.0",
+                description="Plugin with skills and commands",
+            ),
+            path="/tmp/full-plugin",
+            skills=[
+                Skill(name="regular-skill", content="Regular skill content"),
+            ],
+            hooks=None,
+            mcp_config=None,
+            agents=[],
+            commands=[
+                CommandDefinition(
+                    name="cmd1",
+                    description="First command",
+                    content="Command 1 content.",
+                ),
+                CommandDefinition(
+                    name="cmd2",
+                    description="Second command",
+                    content="Command 2 content.",
+                ),
+            ],
+        )
+
+        request = StartConversationRequest(
+            agent=Agent(llm=LLM(model="gpt-4", usage_id="test-llm"), tools=[]),
+            workspace=LocalWorkspace(working_dir="/tmp/test"),
+        )
+
+        result = conversation_service._merge_plugin_into_request(request, plugin)
+
+        # Verify all skills (1 regular + 2 from commands)
+        assert result.agent.agent_context is not None
+        assert len(result.agent.agent_context.skills) == 3
+
+        skill_names = {s.name for s in result.agent.agent_context.skills}
+        assert "regular-skill" in skill_names
+        assert "full-plugin:cmd1" in skill_names
+        assert "full-plugin:cmd2" in skill_names
+
+        # Verify command-derived skills have keyword triggers
+        cmd_skills = [
+            s for s in result.agent.agent_context.skills if ":" in s.name
+        ]
+        for cmd_skill in cmd_skills:
+            assert isinstance(cmd_skill.trigger, KeywordTrigger)
+
     @patch("openhands.agent_server.conversation_service.Plugin")
     def test_load_and_merge_plugin_success(
         self, mock_plugin_class, conversation_service, mock_plugin
