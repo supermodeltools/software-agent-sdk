@@ -1,5 +1,8 @@
 import abc
 from collections.abc import Sequence
+from typing import Literal
+
+from pydantic import Field
 
 from openhands.sdk.critic.result import CriticResult
 from openhands.sdk.event import LLMConvertibleEvent
@@ -10,6 +13,16 @@ class CriticBase(DiscriminatedUnionMixin, abc.ABC):
     """A critic is a function that takes in a list of events,
     optional git patch, and returns a score about the quality of agent's action.
     """
+
+    mode: Literal["finish_and_message", "all_actions"] = Field(
+        default="finish_and_message",
+        description=(
+            "When to run critic evaluation:\n"
+            "- 'finish_and_message': Evaluate on FinishAction and agent"
+            " MessageEvent (default)\n"
+            "- 'all_actions': Evaluate after every agent action"
+        ),
+    )
 
     @abc.abstractmethod
     def evaluate(

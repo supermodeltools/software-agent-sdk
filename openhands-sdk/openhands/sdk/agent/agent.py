@@ -126,7 +126,7 @@ class Agent(AgentBase):
         if self.critic is None:
             return False
 
-        if self.critic_evaluation_mode == "all_actions":
+        if self.critic.mode == "all_actions":
             return True
 
         # For "finish_and_message" mode, only evaluate FinishAction
@@ -320,10 +320,7 @@ class Agent(AgentBase):
             llm_response_id=llm_response.id,
         )
         # Run critic evaluation if configured for finish_and_message mode
-        if (
-            self.critic is not None
-            and self.critic_evaluation_mode == "finish_and_message"
-        ):
+        if self.critic is not None and self.critic.mode == "finish_and_message":
             critic_result = self._evaluate_with_critic(conversation, msg_event)
             if critic_result is not None:
                 # Create new event with critic result

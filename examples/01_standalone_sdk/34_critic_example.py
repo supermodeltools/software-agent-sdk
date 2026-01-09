@@ -42,6 +42,8 @@ critic = APIBasedCritic(
     server_url=get_required_env("CRITIC_SERVER_URL"),
     api_key=get_required_env("CRITIC_API_KEY"),
     model_name=get_required_env("CRITIC_MODEL_NAME"),
+    # finish_and_message: evaluate on FinishAction and agent MessageEvent (default)
+    mode="finish_and_message",
 )
 
 
@@ -55,8 +57,6 @@ agent = Agent(
     ],
     # Add critic to evaluate agent actions
     critic=critic,
-    # finish_and_message: evaluate on FinishAction and agent MessageEvent (default)
-    critic_evaluation_mode="finish_and_message",
 )
 
 cwd = os.getcwd()

@@ -6,7 +6,7 @@ import sys
 from abc import ABC, abstractmethod
 from collections.abc import Generator, Iterable, Sequence
 from concurrent.futures import ThreadPoolExecutor
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any
 
 from pydantic import (
     BaseModel,
@@ -182,16 +182,6 @@ class AgentBase(DiscriminatedUnionMixin, ABC):
             "Optional critic to evaluate agent actions and messages in real-time."
         ),
         examples=[{"kind": "AgentFinishedCritic"}],
-    )
-
-    critic_evaluation_mode: Literal["finish_and_message", "all_actions"] = Field(
-        default="finish_and_message",
-        description=(
-            "When to run critic evaluation:\n"
-            "- 'finish_and_message': Evaluate on FinishAction and agent"
-            " MessageEvent (default)\n"
-            "- 'all_actions': Evaluate after every agent action"
-        ),
     )
 
     # Runtime materialized tools; private and non-serializable
