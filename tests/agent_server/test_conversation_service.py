@@ -1507,7 +1507,6 @@ class TestPluginLoading:
 
     def test_merge_plugin_into_request_with_commands(self, conversation_service):
         """Test merging plugin commands as keyword-triggered skills."""
-        from openhands.sdk.context.skills import Skill
         from openhands.sdk.context.skills.trigger import KeywordTrigger
         from openhands.sdk.plugin import Plugin
         from openhands.sdk.plugin.types import CommandDefinition, PluginManifest
@@ -1606,9 +1605,7 @@ class TestPluginLoading:
         assert "full-plugin:cmd2" in skill_names
 
         # Verify command-derived skills have keyword triggers
-        cmd_skills = [
-            s for s in result.agent.agent_context.skills if ":" in s.name
-        ]
+        cmd_skills = [s for s in result.agent.agent_context.skills if ":" in s.name]
         for cmd_skill in cmd_skills:
             assert isinstance(cmd_skill.trigger, KeywordTrigger)
 

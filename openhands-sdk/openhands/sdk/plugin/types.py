@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 import frontmatter
 from pydantic import BaseModel, Field
 
+
 if TYPE_CHECKING:
     from openhands.sdk.context.skills import Skill
 
@@ -228,7 +229,7 @@ class CommandDefinition(BaseModel):
             metadata=metadata,
         )
 
-    def to_skill(self, plugin_name: str) -> "Skill":
+    def to_skill(self, plugin_name: str) -> Skill:
         """Convert this command to a keyword-triggered Skill.
 
         Creates a Skill with a KeywordTrigger using the Claude Code namespacing

@@ -297,7 +297,8 @@ class ConversationService:
             updates["agent_context"] = new_context
             logger.info(
                 f"Merged {len(all_plugin_skills)} plugin skills "
-                f"({len(plugin.skills)} from skills/, {len(plugin.commands)} from commands/) "
+                f"({len(plugin.skills)} from skills/, "
+                f"{len(plugin.commands)} from commands/) "
                 f"into agent context (total: {len(merged_skills)})"
             )
 
