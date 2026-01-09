@@ -123,6 +123,7 @@ def _extract_model_and_provider(model: str) -> tuple[str, str, str]:
     split = model.split(separator)
 
     if len(split) == 1:
+        # no "/" separator found, try with "."
         separator = "."
         split = model.split(separator)
         if _split_is_actually_version(split):
