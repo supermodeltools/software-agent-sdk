@@ -44,6 +44,34 @@ def test_organize_models_and_providers():
         assert "1024-x-1024/gpt-image-1.5" in result["other"]
 
 
+def test_unverified_models_fallback_when_no_provider_list():
+    models = [
+        "openai/gpt-4o",  # verified -> excluded
+        "anthropic/claude-sonnet-4-20250514",  # verified -> excluded
+        "o3",  # openhands model -> excluded
+        "custom-provider/custom-model",  # invalid provider -> bucketed under "other"
+        "us.anthropic.claude-3-5-sonnet-20241022-v2:0",  # invalid provider prefix
+        "1024-x-1024/gpt-image-1.5",  # invalid provider prefix
+    ]
+
+    with (
+        patch(
+            "openhands.sdk.llm.utils.unverified_models.get_supported_llm_models",
+            return_value=models,
+        ),
+        patch(
+            "openhands.sdk.llm.utils.unverified_models._get_litellm_provider_names",
+            return_value=set(),
+        ),
+    ):
+        result = get_unverified_models()
+
+    assert "openai" not in result
+    assert "anthropic" not in result
+    assert "other" in result
+    assert result["other"] == models[3:]
+
+
 def test_list_bedrock_models_without_boto3(monkeypatch):
     """Should warn and return empty list if boto3 is missing."""
     # Pretend boto3 is not installed
