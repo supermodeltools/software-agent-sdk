@@ -26,8 +26,12 @@ from openhands.sdk.event import (
     ObservationEvent,
     SystemPromptEvent,
     TokenEvent,
+    UserRejectObservation,
 )
-from openhands.sdk.event.condenser import Condensation, CondensationRequest
+from openhands.sdk.event.condenser import (
+    Condensation,
+    CondensationRequest,
+)
 from openhands.sdk.llm import (
     LLMResponse,
     Message,
@@ -110,17 +114,10 @@ class Agent(AgentBase):
             event = SystemPromptEvent(
                 source="agent",
                 system_prompt=TextContent(text=self.system_message),
-                # Always expose a 'security_risk' parameter in tool schemas.
-                # This ensures the schema remains consistent, even if the
-                # security analyzer is disabled. Validation of this field
-                # happens dynamically at runtime depending on the analyzer
-                # configured. This allows weaker models to omit risk field
-                # and bypass validation requirements when analyzer is disabled.
-                # For detailed logic, see `_extract_security_risk` method.
-                tools=[
-                    t.to_openai_tool(add_security_risk_prediction=True)
-                    for t in self.tools_map.values()
-                ],
+                # Tools are stored as ToolDefinition objects and converted to
+                # OpenAI format with security_risk parameter during LLM completion.
+                # See make_llm_completion() in agent/utils.py for details.
+                tools=list(self.tools_map.values()),
             )
             on_event(event)
 
@@ -194,9 +191,20 @@ class Agent(AgentBase):
             self._execute_actions(conversation, pending_actions, on_event)
             return
 
+        # Check if the last user message was blocked by a UserPromptSubmit hook
+        # If so, skip processing and mark conversation as finished
+        for event in reversed(list(state.events)):
+            if isinstance(event, MessageEvent) and event.source == "user":
+                reason = state.pop_blocked_message(event.id)
+                if reason is not None:
+                    logger.info(f"User message blocked by hook: {reason}")
+                    state.execution_status = ConversationExecutionStatus.FINISHED
+                    return
+                break  # Only check the most recent user message
+
         # Prepare LLM messages using the utility function
         _messages_or_condensation = prepare_llm_messages(
-            state.events, condenser=self.condenser
+            state.events, condenser=self.condenser, llm=self.llm
         )
 
         # Process condensation event before agent sampels another action
@@ -409,6 +417,30 @@ class Agent(AgentBase):
         security_risk = risk.SecurityRisk(raw)
         return security_risk
 
+    def _extract_summary(self, tool_name: str, arguments: dict) -> str:
+        """Extract and validate the summary field from tool arguments.
+
+        Summary field is always requested but optional - if LLM doesn't provide
+        it or provides invalid data, we generate a default summary using the
+        tool name and arguments.
+
+        Args:
+            tool_name: Name of the tool being called
+            arguments: Dictionary of tool arguments from LLM
+
+        Returns:
+            The summary string - either from LLM or a default generated one
+        """
+        summary = arguments.pop("summary", None)
+
+        # If valid summary provided by LLM, use it
+        if summary is not None and isinstance(summary, str) and summary.strip():
+            return summary
+
+        # Generate default summary: {tool_name}: {arguments}
+        args_str = json.dumps(arguments)
+        return f"{tool_name}: {args_str}"
+
     def _get_action_event(
         self,
         tool_call: MessageToolCall,
@@ -471,6 +503,8 @@ class Agent(AgentBase):
                 "Unexpected 'security_risk' key found in tool arguments"
             )
 
+            summary = self._extract_summary(tool.name, arguments)
+
             action: Action = tool.action_from_arguments(arguments)
         except (json.JSONDecodeError, ValidationError, ValueError) as e:
             err = (
@@ -511,6 +545,7 @@ class Agent(AgentBase):
             tool_call=tool_call,
             llm_response_id=llm_response_id,
             security_risk=security_risk,
+            summary=summary,
         )
 
         # Run critic evaluation if configured
@@ -536,8 +571,26 @@ class Agent(AgentBase):
 
         It will call the tool's executor and update the state & call callback fn
         with the observation.
+
+        If the action was blocked by a PreToolUse hook (recorded in
+        state.blocked_actions), a UserRejectObservation is emitted instead
+        of executing the action.
         """
         state = conversation.state
+
+        # Check if this action was blocked by a PreToolUse hook
+        reason = state.pop_blocked_action(action_event.id)
+        if reason is not None:
+            logger.info(f"Action '{action_event.tool_name}' blocked by hook: {reason}")
+            rejection = UserRejectObservation(
+                action_id=action_event.id,
+                tool_name=action_event.tool_name,
+                tool_call_id=action_event.tool_call_id,
+                rejection_reason=reason,
+            )
+            on_event(rejection)
+            return rejection
+
         tool = self.tools_map.get(action_event.tool_name, None)
         if tool is None:
             raise RuntimeError(
@@ -546,16 +599,29 @@ class Agent(AgentBase):
             )
 
         # Execute actions!
-        if should_enable_observability():
-            tool_name = extract_action_name(action_event)
-            observation: Observation = observe(name=tool_name, span_type="TOOL")(tool)(
-                action_event.action, conversation
+        try:
+            if should_enable_observability():
+                tool_name = extract_action_name(action_event)
+                observation: Observation = observe(name=tool_name, span_type="TOOL")(
+                    tool
+                )(action_event.action, conversation)
+            else:
+                observation = tool(action_event.action, conversation)
+            assert isinstance(observation, Observation), (
+                f"Tool '{tool.name}' executor must return an Observation"
             )
-        else:
-            observation = tool(action_event.action, conversation)
-        assert isinstance(observation, Observation), (
-            f"Tool '{tool.name}' executor must return an Observation"
-        )
+        except ValueError as e:
+            # Tool execution raised a ValueError (e.g., invalid argument combination)
+            # Convert to AgentErrorEvent so the agent can correct itself
+            err = f"Error executing tool '{tool.name}': {e}"
+            logger.warning(err)
+            error_event = AgentErrorEvent(
+                error=err,
+                tool_name=tool.name,
+                tool_call_id=action_event.tool_call.id,
+            )
+            on_event(error_event)
+            return error_event
 
         obs_event = ObservationEvent(
             observation=observation,
