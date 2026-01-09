@@ -1,6 +1,7 @@
 """Tests for MCP utils functionality - integration tests with real MCP servers."""
 
 import asyncio
+import logging
 import socket
 import threading
 import time
@@ -8,12 +9,15 @@ from collections.abc import Generator
 from typing import Literal
 from unittest.mock import MagicMock, patch
 
+import httpx
 import pytest
 from fastmcp import FastMCP
 
 from openhands.sdk.mcp import create_mcp_tools
 from openhands.sdk.mcp.exceptions import MCPTimeoutError
 
+
+logger = logging.getLogger(__name__)
 
 MCPTransport = Literal["http", "streamable-http", "sse"]
 
@@ -23,6 +27,27 @@ def _find_free_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind(("", 0))
         return s.getsockname()[1]
+
+
+def _wait_for_port(port: int, timeout: float = 5.0, interval: float = 0.1) -> None:
+    """Wait for a port to become available by polling with HTTP requests."""
+    max_attempts = int(timeout / interval)
+    for _ in range(max_attempts):
+        try:
+            # Try HTTP request since MCP servers use HTTP
+            with httpx.Client(timeout=interval) as client:
+                client.get(f"http://127.0.0.1:{port}/")
+                return
+        except httpx.ConnectError:
+            pass
+        except (httpx.TimeoutException, httpx.HTTPStatusError):
+            # Any response (even errors) means server is up
+            return
+        except Exception:
+            # Any other response means server is up
+            return
+        time.sleep(interval)
+    raise RuntimeError(f"Server failed to start on port {port} within {timeout}s")
 
 
 class MCPTestServer:
@@ -41,8 +66,10 @@ class MCPTestServer:
         """Start the server and return the port."""
         self.port = _find_free_port()
         path = "/sse" if transport == "sse" else "/mcp"
+        startup_error: list[Exception] = []
 
         async def run_server():
+            assert self.port is not None
             await self.mcp.run_http_async(
                 host="127.0.0.1",
                 port=self.port,
@@ -56,17 +83,30 @@ class MCPTestServer:
             asyncio.set_event_loop(loop)
             try:
                 loop.run_until_complete(run_server())
-            except Exception:
-                pass
+            except Exception as e:
+                logger.error(f"MCP test server failed: {e}")
+                startup_error.append(e)
+            finally:
+                loop.close()
 
         self._server_thread = threading.Thread(target=server_thread_target, daemon=True)
         self._server_thread.start()
-        time.sleep(1.5)  # Wait for server to be ready
+
+        # Wait for server to be ready by polling the port
+        _wait_for_port(self.port)
+
+        # Check if server thread failed during startup
+        if startup_error:
+            raise startup_error[0]
+
         return self.port
 
     def stop(self):
-        """Stop the server (daemon thread cleans up automatically)."""
-        pass
+        """Stop the server and clean up resources."""
+        if self._server_thread is not None:
+            # Daemon thread will clean up automatically when process exits
+            self._server_thread = None
+        self.port = None
 
 
 @pytest.fixture
@@ -127,7 +167,7 @@ def test_create_mcp_tools_http_server(http_mcp_server: MCPTestServer):
         }
     }
 
-    tools = create_mcp_tools(config, timeout=30.0)
+    tools = create_mcp_tools(config, timeout=10.0)
 
     assert len(tools) == 2
     tool_names = {t.name for t in tools}
@@ -153,7 +193,7 @@ def test_create_mcp_tools_sse_server(sse_mcp_server: MCPTestServer):
         }
     }
 
-    tools = create_mcp_tools(config, timeout=30.0)
+    tools = create_mcp_tools(config, timeout=10.0)
 
     assert len(tools) == 2
     tool_names = {t.name for t in tools}
@@ -178,7 +218,7 @@ def test_create_mcp_tools_mixed_servers(
         }
     }
 
-    tools = create_mcp_tools(config, timeout=30.0)
+    tools = create_mcp_tools(config, timeout=10.0)
 
     # Should have tools from both servers (prefixed with server name)
     assert len(tools) == 4
@@ -200,7 +240,7 @@ def test_create_mcp_tools_http_schema_validation(http_mcp_server: MCPTestServer)
         }
     }
 
-    tools = create_mcp_tools(config, timeout=30.0)
+    tools = create_mcp_tools(config, timeout=10.0)
     add_tool = next(t for t in tools if t.name == "add_numbers")
 
     openai_schema = add_tool.to_openai_tool()
@@ -222,7 +262,7 @@ def test_create_mcp_tools_transport_inferred_from_url(http_mcp_server: MCPTestSe
         }
     }
 
-    tools = create_mcp_tools(config, timeout=30.0)
+    tools = create_mcp_tools(config, timeout=10.0)
     assert len(tools) == 2
 
 
@@ -237,7 +277,7 @@ def test_create_mcp_tools_sse_inferred_from_url(sse_mcp_server: MCPTestServer):
         }
     }
 
-    tools = create_mcp_tools(config, timeout=30.0)
+    tools = create_mcp_tools(config, timeout=10.0)
     assert len(tools) == 2
 
 
@@ -252,7 +292,7 @@ def test_execute_http_tool(http_mcp_server: MCPTestServer):
         }
     }
 
-    tools = create_mcp_tools(config, timeout=30.0)
+    tools = create_mcp_tools(config, timeout=10.0)
     greet_tool = next(t for t in tools if t.name == "greet")
 
     action = greet_tool.action_from_arguments({"name": "World"})
@@ -274,7 +314,7 @@ def test_execute_sse_tool(sse_mcp_server: MCPTestServer):
         }
     }
 
-    tools = create_mcp_tools(config, timeout=30.0)
+    tools = create_mcp_tools(config, timeout=10.0)
     multiply_tool = next(t for t in tools if t.name == "multiply")
 
     action = multiply_tool.action_from_arguments({"x": 6, "y": 7})
@@ -296,12 +336,13 @@ def test_create_mcp_tools_connection_to_nonexistent_server():
         }
     }
 
-    # Should either return empty tools or raise - key is it shouldn't hang
+    # Should either return empty tools or raise connection-related errors
+    # Key is it shouldn't hang
     try:
         tools = create_mcp_tools(config, timeout=5.0)
-        assert len(tools) == 0 or tools is not None
-    except Exception:
-        pass  # Connection errors are acceptable
+        assert len(tools) == 0  # No tools from failed connection
+    except (ConnectionError, TimeoutError, MCPTimeoutError, OSError, RuntimeError):
+        pass  # Expected connection errors are acceptable
 
 
 def test_create_mcp_tools_stdio_server():
