@@ -91,7 +91,7 @@ def _split_is_actually_version(split: list[str]) -> bool:
 def _get_litellm_provider_names() -> set[str]:
     try:
         provider_list = litellm.provider_list
-    except Exception:
+    except AttributeError:
         return set()
 
     result: set[str] = set()
