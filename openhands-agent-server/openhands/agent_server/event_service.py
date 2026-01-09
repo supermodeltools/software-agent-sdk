@@ -311,7 +311,15 @@ class EventService:
             with self._conversation.state as state:
                 run = state.execution_status != ConversationExecutionStatus.RUNNING
         if run:
-            await self.run()
+            conversation = self._conversation
+
+            async def _run_with_error_handling():
+                try:
+                    await loop.run_in_executor(None, conversation.run)
+                except Exception:
+                    logger.exception("Error during conversation run from send_message")
+
+            loop.create_task(_run_with_error_handling())
 
     async def subscribe_to_events(self, subscriber: Subscriber[Event]) -> UUID:
         subscriber_id = self._pub_sub.subscribe(subscriber)

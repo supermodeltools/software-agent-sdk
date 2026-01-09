@@ -1,3 +1,4 @@
+import asyncio
 from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -681,7 +682,7 @@ class TestEventServiceSendMessage:
 
     @pytest.mark.asyncio
     async def test_send_message_with_run_true_agent_idle(self, event_service):
-        """Test send_message with run=True and agent idle triggers run()."""
+        """Test send_message with run=True and agent idle triggers run."""
         # Mock conversation and its methods
         conversation = MagicMock()
         state = MagicMock()
@@ -689,12 +690,10 @@ class TestEventServiceSendMessage:
         state.__enter__ = MagicMock(return_value=state)
         state.__exit__ = MagicMock(return_value=None)
         conversation.state = state
-        conversation._state = state
         conversation.send_message = MagicMock()
         conversation.run = MagicMock()
 
         event_service._conversation = conversation
-        event_service._publish_state_update = AsyncMock()
         message = Message(role="user", content=[])
 
         # Call send_message with run=True
@@ -703,13 +702,10 @@ class TestEventServiceSendMessage:
         # Verify send_message was called
         conversation.send_message.assert_called_once_with(message)
 
-        # Verify a run task was created (since agent was idle)
-        assert event_service._run_task is not None
+        # Give the background task a chance to run
+        await asyncio.sleep(0.01)
 
-        # Wait for the background task to complete
-        await event_service._run_task
-
-        # Verify conversation.run was called
+        # Verify run was called since agent was idle
         conversation.run.assert_called_once()
 
     @pytest.mark.asyncio
