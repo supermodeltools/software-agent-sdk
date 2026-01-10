@@ -702,10 +702,53 @@ class TestEventServiceSendMessage:
         # Verify send_message was called
         conversation.send_message.assert_called_once_with(message)
 
-        # Give the background task a chance to run
-        await asyncio.sleep(0.01)
+        # Wait for the background task to call run with a timeout
+        async def wait_for_run_called():
+            while not conversation.run.called:
+                await asyncio.sleep(0.001)
+
+        await asyncio.wait_for(wait_for_run_called(), timeout=1.0)
 
         # Verify run was called since agent was idle
+        conversation.run.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_send_message_with_run_true_logs_exception(self, event_service):
+        """Test that exceptions from conversation.run() are caught and logged."""
+        # Mock conversation and its methods
+        conversation = MagicMock()
+        state = MagicMock()
+        state.execution_status = ConversationExecutionStatus.IDLE
+        state.__enter__ = MagicMock(return_value=state)
+        state.__exit__ = MagicMock(return_value=None)
+        conversation.state = state
+        conversation.send_message = MagicMock()
+        conversation.run = MagicMock(side_effect=RuntimeError("Test error"))
+
+        event_service._conversation = conversation
+        message = Message(role="user", content=[])
+
+        # Patch the logger to verify exception logging
+        with patch("openhands.agent_server.event_service.logger") as mock_logger:
+            # Call send_message with run=True
+            await event_service.send_message(message, run=True)
+
+            # Wait for the background task to complete with a timeout
+            async def wait_for_exception_logged():
+                while not mock_logger.exception.called:
+                    await asyncio.sleep(0.001)
+
+            await asyncio.wait_for(wait_for_exception_logged(), timeout=1.0)
+
+            # Verify the exception was logged via logger.exception()
+            mock_logger.exception.assert_called_once_with(
+                "Error during conversation run from send_message"
+            )
+
+        # Verify send_message was still called
+        conversation.send_message.assert_called_once_with(message)
+
+        # Verify run was called (and raised the exception)
         conversation.run.assert_called_once()
 
     @pytest.mark.asyncio

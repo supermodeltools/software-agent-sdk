@@ -319,6 +319,12 @@ class EventService:
                 except Exception:
                     logger.exception("Error during conversation run from send_message")
 
+            # Fire-and-forget: This task is intentionally not tracked because
+            # send_message() is designed to return immediately after queuing the
+            # message. The conversation run happens in the background and any
+            # errors are logged. Unlike the run() method which is explicitly
+            # awaited, this pattern allows clients to send messages without
+            # blocking on the full conversation execution.
             loop.create_task(_run_with_error_handling())
 
     async def subscribe_to_events(self, subscriber: Subscriber[Event]) -> UUID:
