@@ -49,7 +49,7 @@ def test_build_authorize_url():
     assert "code_challenge=test_challenge" in url
     assert "code_challenge_method=S256" in url
     assert "state=test_state" in url
-    assert "originator=openhands" in url
+    assert "originator=codex_cli_rs" in url
     assert "response_type=code" in url
 
 
@@ -188,7 +188,7 @@ def test_openai_subscription_auth_create_llm_success(tmp_path):
     assert llm.model == "openai/gpt-5.2-codex"
     assert llm.api_key is not None
     assert llm.extra_headers is not None
-    assert llm.extra_headers.get("originator") == "openhands"
+    assert llm.extra_headers.get("originator") == "codex_cli_rs"
 
 
 @pytest.mark.asyncio

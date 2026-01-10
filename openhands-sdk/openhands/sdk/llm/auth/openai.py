@@ -69,7 +69,8 @@ def _build_authorize_url(redirect_uri: str, code_challenge: str, state: str) -> 
         "id_token_add_organizations": "true",
         "codex_cli_simplified_flow": "true",
         "state": state,
-        "originator": "openhands",
+        # Match Codex CLI's originator value.
+        "originator": os.environ.get("OPENAI_OAUTH_ORIGINATOR", "codex_cli_rs"),
     }
     return f"{ISSUER}/oauth/authorize?{urlencode(params)}"
 
@@ -418,7 +419,7 @@ class OpenAISubscriptionAuth:
             base_url=CODEX_API_ENDPOINT.rsplit("/", 1)[0],
             api_key=creds.access_token,
             extra_headers={
-                "originator": "openhands",
+                "originator": os.environ.get("OPENAI_OAUTH_ORIGINATOR", "codex_cli_rs"),
                 "User-Agent": user_agent,
             },
             temperature=None,
