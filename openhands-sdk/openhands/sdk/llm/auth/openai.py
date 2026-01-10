@@ -167,15 +167,20 @@ class OpenAISubscriptionAuth:
         self,
         credential_store: CredentialStore | None = None,
         oauth_port: int = DEFAULT_OAUTH_PORT,
+        oauth_listen_host: str = "localhost",
     ):
         """Initialize the OpenAI subscription auth handler.
 
         Args:
             credential_store: Optional custom credential store.
-            oauth_port: Port for the local OAuth callback server.
+            oauth_port: Port for the OAuth callback server.
+            oauth_listen_host: Host interface to bind the local callback server.
+                Defaults to "localhost". For hosted/remote testing, you may want
+                to use "0.0.0.0".
         """
         self._credential_store = credential_store or CredentialStore()
         self._oauth_port = oauth_port
+        self._oauth_listen_host = oauth_listen_host
 
     @property
     def vendor(self) -> str:
@@ -237,7 +242,10 @@ class OpenAISubscriptionAuth:
         """
         code_verifier, code_challenge = _generate_pkce()
         state = generate_token(32)
-        redirect_uri = f"http://localhost:{self._oauth_port}/auth/callback"
+        redirect_uri = (
+            os.environ.get("OPENAI_OAUTH_REDIRECT_URI")
+            or f"http://localhost:{self._oauth_port}/auth/callback"
+        )
         auth_url = _build_authorize_url(redirect_uri, code_challenge, state)
 
         # Future to receive callback result
@@ -299,7 +307,8 @@ class OpenAISubscriptionAuth:
 
         runner = web.AppRunner(app)
         await runner.setup()
-        site = web.TCPSite(runner, "localhost", self._oauth_port)
+        listen_host = os.environ.get("OPENAI_OAUTH_LISTEN_HOST", self._oauth_listen_host)
+        site = web.TCPSite(runner, listen_host, self._oauth_port)
 
         try:
             await site.start()
