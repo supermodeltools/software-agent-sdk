@@ -1,4 +1,4 @@
-"""Test hard condensation requirement triggers hard context reset.
+"""Test hard context reset when condensation is unavailable.
 
 This test verifies that:
 1. When condensation is explicitly requested via conversation.condense()
@@ -21,8 +21,8 @@ INSTRUCTION = """Using the echo command, print the numbers 1 through 3.
 Use exactly 3 separate echo commands, one for each number."""
 
 
-class HardCondensationRequirementTest(BaseIntegrationTest):
-    """Test hard requirements trigger hard reset when condensation unavailable."""
+class HardContextResetTest(BaseIntegrationTest):
+    """Test hard context reset when condensation is unavailable."""
 
     INSTRUCTION: str = INSTRUCTION
 
