@@ -252,6 +252,7 @@ class LLMSummarizingCondenser(RollingCondenser):
         # Summary offset is the same as forgetting_start
         return forgotten_events, forgetting_start
 
+    @observe(ignore_inputs=["view", "agent_llm"])
     def hard_context_reset(
         self,
         view: View,

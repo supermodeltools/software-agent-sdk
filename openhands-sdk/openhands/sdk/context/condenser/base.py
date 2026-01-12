@@ -113,6 +113,10 @@ class RollingCondenser(PipelinableCondenserBase, ABC):
         By default, rolling condensers do not support hard context resets. Override this
         method to implement hard context reset logic by returning a `Condensation`
         object.
+
+        This method is invoked when:
+        - A HARD condensation requirement is triggered (e.g., by user request)
+        - But the condenser raises a NoCondensationAvailableException error
         """
         return None
 
@@ -160,11 +164,17 @@ class RollingCondenser(PipelinableCondenserBase, ABC):
                     # without condensation, but the condenser cannot provide one. We'll
                     # try to recover from this situation by performing a hard context
                     # reset, if supported by the condenser.
-                    hard_reset_condensation = self.hard_context_reset(
-                        view, agent_llm=agent_llm
-                    )
-                    if hard_reset_condensation is not None:
-                        return hard_reset_condensation
+                    try:
+                        hard_reset_condensation = self.hard_context_reset(
+                            view, agent_llm=agent_llm
+                        )
+                        if hard_reset_condensation is not None:
+                            return hard_reset_condensation
+                        
+                    # And if something goes wrong with the hard reset make sure we keep
+                    # both errors in the stack
+                    except Exception as hard_reset_exception:
+                        raise hard_reset_exception from e
 
                 # In all other situations re-raise the exception.
                 raise e
