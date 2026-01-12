@@ -47,12 +47,17 @@ class ToolCallMatchingProperty(ViewPropertyBase):
         """
         tool_call_ids: set[ToolCallID] = set()
         for event in events:
-            if isinstance(event, ObservationBaseEvent) and event.tool_call_id is not None:
+            if (
+                isinstance(event, ObservationBaseEvent)
+                and event.tool_call_id is not None
+            ):
                 tool_call_ids.add(event.tool_call_id)
         return tool_call_ids
 
     def enforce(
-        self, current_view_events: list[LLMConvertibleEvent], all_events: list[Event]
+        self,
+        current_view_events: Sequence[LLMConvertibleEvent],
+        all_events: Sequence[Event],  # noqa: ARG002
     ) -> set[EventID]:
         """Enforce tool call matching by removing orphaned actions and observations.
 
@@ -84,7 +89,9 @@ class ToolCallMatchingProperty(ViewPropertyBase):
         return events_to_remove
 
     def manipulation_indices(
-        self, current_view_events: list[LLMConvertibleEvent], all_events: list[Event]
+        self,
+        current_view_events: Sequence[LLMConvertibleEvent],
+        all_events: Sequence[Event],  # noqa: ARG002
     ) -> ManipulationIndices:
         """Calculate manipulation indices for tool call matching.
 

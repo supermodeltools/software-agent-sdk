@@ -10,6 +10,8 @@ A tool loop consists of:
 - Terminated by the first non-ActionEvent/ObservationEvent
 """
 
+from collections.abc import Sequence
+
 from openhands.sdk.context.view.properties.tool_loop_atomicity import (
     ToolLoopAtomicityProperty,
 )
@@ -32,7 +34,7 @@ def create_action_event(
     llm_response_id: str,
     tool_call_id: str,
     tool_name: str = "test_tool",
-    thinking_blocks: list[ThinkingBlock | RedactedThinkingBlock] | None = None,
+    thinking_blocks: Sequence[ThinkingBlock | RedactedThinkingBlock] | None = None,
 ) -> ActionEvent:
     """Helper to create an ActionEvent with specified IDs."""
     action = MCPToolAction(data={})
@@ -46,7 +48,7 @@ def create_action_event(
 
     return ActionEvent(
         thought=[TextContent(text="Test thought")],
-        thinking_blocks=thinking_blocks or [],
+        thinking_blocks=list(thinking_blocks) if thinking_blocks else [],
         action=action,
         tool_name=tool_name,
         tool_call_id=tool_call_id,
@@ -150,7 +152,7 @@ def test_enforce_no_thinking_blocks_no_enforcement() -> None:
 
 
 def test_enforce_tool_loop_terminated_by_message() -> None:
-    """Test that tool loops are correctly terminated by non-action/observation events."""
+    """Test that tool loops are correctly terminated by non-action/observation."""
     thinking = [
         ThinkingBlock(type="thinking", thinking="Thinking...", signature="sig1")
     ]
@@ -453,9 +455,7 @@ def test_manipulation_indices_interleaved_observations() -> None:
 
 def test_manipulation_indices_complex_scenario() -> None:
     """Test complex scenario with multiple loops and event types."""
-    thinking1 = [
-        ThinkingBlock(type="thinking", thinking="First", signature="sig1")
-    ]
+    thinking1 = [ThinkingBlock(type="thinking", thinking="First", signature="sig1")]
 
     msg1 = message_event("Start")
 

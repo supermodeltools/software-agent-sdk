@@ -1,5 +1,4 @@
 from typing import cast
-from unittest.mock import create_autospec
 
 from openhands.sdk.context.view import View
 from openhands.sdk.event.base import Event
@@ -9,9 +8,7 @@ from openhands.sdk.event.condenser import (
     CondensationSummaryEvent,
 )
 from openhands.sdk.event.llm_convertible import (
-    ActionEvent,
     MessageEvent,
-    ObservationEvent,
 )
 from openhands.sdk.llm import Message, TextContent
 

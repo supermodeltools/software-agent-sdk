@@ -1,5 +1,7 @@
 """Property for ensuring ActionEvent batches remain atomic."""
 
+from collections.abc import Sequence
+
 from openhands.sdk.context.view.manipulation_indices import ManipulationIndices
 from openhands.sdk.context.view.properties.base import ViewPropertyBase
 from openhands.sdk.event.base import Event, LLMConvertibleEvent
@@ -15,7 +17,9 @@ class BatchAtomicityProperty(ViewPropertyBase):
     """
 
     def enforce(
-        self, current_view_events: list[LLMConvertibleEvent], all_events: list[Event]
+        self,
+        current_view_events: Sequence[LLMConvertibleEvent],
+        all_events: Sequence[Event],
     ) -> set[EventID]:
         """Enforce batch atomicity by marking all events in a partially-removed batch.
 
@@ -48,7 +52,9 @@ class BatchAtomicityProperty(ViewPropertyBase):
         return events_to_remove
 
     def manipulation_indices(
-        self, current_view_events: list[LLMConvertibleEvent], all_events: list[Event]
+        self,
+        current_view_events: Sequence[LLMConvertibleEvent],
+        all_events: Sequence[Event],  # noqa: ARG002
     ) -> ManipulationIndices:
         """Calculate manipulation indices that respect batch atomicity.
 
@@ -63,7 +69,10 @@ class BatchAtomicityProperty(ViewPropertyBase):
         Returns:
             ManipulationIndices with all valid manipulation points
         """
-        from openhands.sdk.event.llm_convertible import ActionEvent, ObservationBaseEvent
+        from openhands.sdk.event.llm_convertible import (
+            ActionEvent,
+            ObservationBaseEvent,
+        )
 
         batches = self._build_batches(current_view_events)
         event_id_to_index = self._build_event_id_to_index(current_view_events)

@@ -1,5 +1,7 @@
 """Property for ensuring tool loops remain atomic."""
 
+from collections.abc import Sequence
+
 from openhands.sdk.context.view.manipulation_indices import ManipulationIndices
 from openhands.sdk.context.view.properties.base import ViewPropertyBase
 from openhands.sdk.event.base import Event, LLMConvertibleEvent
@@ -13,7 +15,7 @@ class ToolLoopAtomicityProperty(ViewPropertyBase):
 
     Claude API requires that thinking blocks stay with their associated tool calls.
     A tool loop is:
-    - An initial batch containing thinking blocks (ActionEvents with non-empty thinking_blocks)
+    - An initial batch with thinking blocks (ActionEvents w/ non-empty thinking_blocks)
     - All subsequent consecutive ActionEvent/ObservationEvent batches
     - Terminated by the first non-ActionEvent/ObservationEvent
     """
@@ -21,7 +23,7 @@ class ToolLoopAtomicityProperty(ViewPropertyBase):
     def _build_batch_ranges(
         self,
         batches: dict[EventID, list[EventID]],
-        events: list[Event],
+        events: Sequence[Event],
         event_id_to_index: dict[EventID, int],
     ) -> list[tuple[int, int, bool, list[EventID]]]:
         """Build batch range metadata for tool loop detection.
@@ -32,7 +34,7 @@ class ToolLoopAtomicityProperty(ViewPropertyBase):
             event_id_to_index: Mapping of event IDs to their indices
 
         Returns:
-            List of tuples (min_idx, max_idx, has_thinking, action_ids) sorted by min_idx
+            List of tuples (min_idx, max_idx, has_thinking, action_ids) by min_idx
         """
         batch_ranges: list[tuple[int, int, bool, list[EventID]]] = []
 
@@ -59,12 +61,13 @@ class ToolLoopAtomicityProperty(ViewPropertyBase):
         self,
         start_idx: int,
         batch_ranges: list[tuple[int, int, bool, list[EventID]]],
-        events: list[Event],
+        events: Sequence[Event],
     ) -> tuple[int, int, int]:
         """Scan forward from a starting batch to find the full extent of a tool loop.
 
         Args:
-            start_idx: Index in batch_ranges where the tool loop starts (must have has_thinking=True)
+            start_idx: Index in batch_ranges where the tool loop starts
+                (must have has_thinking=True)
             batch_ranges: Sorted list of batch range tuples
             events: Event sequence being analyzed
 
@@ -77,7 +80,9 @@ class ToolLoopAtomicityProperty(ViewPropertyBase):
         min_idx, max_idx, has_thinking, _ = batch_ranges[start_idx]
 
         if not has_thinking:
-            raise ValueError("Tool loop must start with a batch containing thinking blocks")
+            raise ValueError(
+                "Tool loop must start with a batch containing thinking blocks"
+            )
 
         loop_start = min_idx
         loop_end = max_idx
@@ -120,7 +125,7 @@ class ToolLoopAtomicityProperty(ViewPropertyBase):
 
         return loop_start, loop_end, j
 
-    def _identify_tool_loops(self, events: list[Event]) -> list[list[EventID]]:
+    def _identify_tool_loops(self, events: Sequence[Event]) -> list[list[EventID]]:
         """Identify all tool loops in the event sequence.
 
         Returns:
@@ -158,7 +163,9 @@ class ToolLoopAtomicityProperty(ViewPropertyBase):
         return tool_loops
 
     def enforce(
-        self, current_view_events: list[LLMConvertibleEvent], all_events: list[Event]
+        self,
+        current_view_events: Sequence[LLMConvertibleEvent],
+        all_events: Sequence[Event],
     ) -> set[EventID]:
         """Enforce tool loop atomicity by removing partially-present tool loops.
 
@@ -193,7 +200,9 @@ class ToolLoopAtomicityProperty(ViewPropertyBase):
         return events_to_remove
 
     def manipulation_indices(
-        self, current_view_events: list[LLMConvertibleEvent], all_events: list[Event]
+        self,
+        current_view_events: Sequence[LLMConvertibleEvent],
+        all_events: Sequence[Event],  # noqa: ARG002
     ) -> ManipulationIndices:
         """Calculate manipulation indices that respect tool loop atomicity.
 

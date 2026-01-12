@@ -24,7 +24,9 @@ class ViewPropertyBase(ABC):
 
     @abstractmethod
     def enforce(
-        self, current_view_events: list[LLMConvertibleEvent], all_events: list[Event]
+        self,
+        current_view_events: Sequence[LLMConvertibleEvent],
+        all_events: Sequence[Event],
     ) -> set[EventID]:
         """Enforce the property on a list of events.
 
@@ -41,7 +43,9 @@ class ViewPropertyBase(ABC):
 
     @abstractmethod
     def manipulation_indices(
-        self, current_view_events: list[LLMConvertibleEvent], all_events: list[Event]
+        self,
+        current_view_events: Sequence[LLMConvertibleEvent],
+        all_events: Sequence[Event],
     ) -> ManipulationIndices:
         """Get manipulation indices for the property on a list of events.
 
@@ -108,16 +112,16 @@ class ViewPropertyBase(ABC):
     ) -> ManipulationIndices:
         """Build ManipulationIndices that exclude indices within atomic ranges.
 
-        Atomic ranges represent contiguous sequences of events that must remain together.
-        This method creates a set of valid manipulation indices that excludes all indices
-        that fall within these atomic ranges.
+        Atomic ranges represent contiguous sequences of events that must remain
+        together. This method creates a set of valid manipulation indices that
+        excludes all indices that fall within these atomic ranges.
 
         Args:
             atomic_ranges: List of (start_idx, end_idx) tuples defining atomic ranges
             num_events: Total number of events in the view
 
         Returns:
-            ManipulationIndices with valid indices (excluding those within atomic ranges)
+            ManipulationIndices with valid indices (excluding atomic ranges)
         """
         # Start with all possible indices (including after the last event)
         valid_indices = set(range(num_events + 1))

@@ -251,7 +251,7 @@ def test_manipulation_indices_multi_action_batch() -> None:
 
 
 def test_manipulation_indices_interleaved_batch() -> None:
-    """Test manipulation indices when batch actions are interleaved with observations."""
+    """Test manipulation indices with batch actions interleaved with observations."""
     action1 = create_action_event("response_1", "call_1")
     obs1 = create_observation_event("call_1")
     action2 = create_action_event("response_1", "call_2")
@@ -263,8 +263,8 @@ def test_manipulation_indices_interleaved_batch() -> None:
     indices = prop.manipulation_indices(events, events)
 
     # Batch spans from index 0 (action1) to index 3 (obs2, last observation)
-    # The batch now includes observations, so the range extends to the last observation
-    # Can't manipulate at indices 1, 2, 3 (within the batch range including observations)
+    # The batch includes observations, so range extends to the last observation
+    # Can't manipulate at indices 1, 2, 3 (within batch range w/ observations)
     # Can manipulate at 0 (before), 4 (end)
     assert indices == {0, 4}
 
@@ -369,5 +369,6 @@ def test_manipulation_indices_complex_scenario() -> None:
     # msg2: 5
     # batch2: 6-7 (no observations, so just actions)
     # end: 8
-    # Can manipulate at: 0, 1 (before batch1), 5 (between batches), 6 (before batch2), 8 (end)
+    # Can manipulate at: 0, 1 (before batch1), 5 (between batches),
+    # 6 (before batch2), 8 (end)
     assert indices == {0, 1, 5, 6, 8}
