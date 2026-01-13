@@ -7,6 +7,10 @@ This test verifies that:
 4. The conversation can continue successfully after the hard context reset
 5. After continuing, a second condensation (normal, not hard reset) can occur
 6. The view is well-formed with both the hard context reset and normal summary
+
+REVIEW: CRITICAL - Point #6 is not actually tested! The test never constructs
+a View object or verifies its structure. It only checks that 2 Condensation
+events exist in collected_events, which doesn't prove the View is well-formed.
 """
 
 from openhands.sdk import Tool
@@ -19,18 +23,27 @@ from tests.integration.base import BaseIntegrationTest, TestResult
 
 
 # Module-level instruction for test runner
-# This task is designed to generate sufficient events (7-8 bash tool calls)
+# This task is designed to generate sufficient events (6+ separate bash commands)
 # to ensure a valid condensation range exists after the first run.
 # With keep_first=4, we need at least 5+ events for normal condensation.
-INSTRUCTION = """Perform the following tasks in order:
+# IMPORTANT: Each step must be a SEPARATE terminal command
+INSTRUCTION = """Perform the following tasks. Execute EACH step as a SEPARATE
+terminal command (do NOT combine them with && or ;). After each step,
+verify it worked before proceeding:
+
 1. Create a temporary directory called 'test_dir'
-2. Create a file called 'numbers.txt' in test_dir with the content '1'
-3. Append '2' to numbers.txt
-4. Append '3' to numbers.txt
-5. Display the contents of numbers.txt using cat
-6. Count the lines in numbers.txt using wc -l
-7. Remove the test_dir directory and all its contents
-Make sure to complete all 7 steps."""
+2. List the contents of the current directory to verify test_dir was created
+3. Create a file called 'numbers.txt' in test_dir with the content '1'
+4. Display the contents of numbers.txt to verify it contains '1'
+5. Append '2' to numbers.txt
+6. Display the contents again to verify it now has '1' and '2'
+7. Append '3' to numbers.txt
+8. Display the final contents to verify it has '1', '2', and '3'
+9. Count the lines in numbers.txt using wc -l
+10. Remove the test_dir directory and all its contents
+
+Make sure to execute each step as a SEPARATE command and verify the
+output after each step."""
 
 # Second instruction to continue conversation after both condensations
 SECOND_INSTRUCTION = """Now perform these additional tasks:
@@ -48,12 +61,55 @@ class HardContextResetTest(BaseIntegrationTest):
     - Only events outside keep_first range are forgotten in normal condensation
     - Task completion is verified through actual outputs
     - Summary content is meaningful and non-empty
+
+    REVIEW: COMPREHENSIVE TEST QUALITY ISSUES
+    ==========================================
+    While the test improvements address some earlier issues, significant problems
+    remain that compromise test reliability and correctness:
+
+    **CRITICAL GAPS:**
+    1. NO VIEW VERIFICATION - Test claims to verify "view is well-formed" but
+       never constructs a View object or checks its structure
+    2. MISSING CONVERSATION REF - Can't do View verification since conversation
+       is not stored in instance variable for use in verify_result()
+    3. WEAK VERIFICATION LOGIC - Checks that SOME events were forgotten but not
+       that the RIGHT events were forgotten or that counts are correct
+
+    **CORRECTNESS ISSUES:**
+    4. MAGIC NUMBERS - Uses hardcoded values (2, 5) based on undocumented
+       assumptions about condensation algorithm behavior
+    5. FRAGILE CHECKS - "Exactly 2" condensations assumes no auto-triggering;
+       string matching on outputs could give false positives
+    6. NO ORDERING VERIFICATION - Doesn't verify hard reset happened before
+       normal condensation in the event sequence
+
+    **LOGIC PROBLEMS:**
+    7. WEAK HARD RESET CHECK - Only verifies SOME events forgotten, not ALL
+    8. WEAK NORMAL CONDENSATION CHECK - Doesn't verify keep_first logic or
+       which events were kept vs forgotten
+    9. POOR TASK VERIFICATION - String matching is fragile; should verify
+       actual file operations, line counts, cleanup, etc.
+
+    **POTENTIAL BUGS:**
+    10. TIMING ISSUES - No verification that condense() completes or callbacks
+        are invoked before checking results
+    11. ERROR HANDLING - No tests for what happens if condensation fails or
+        produces invalid summaries
+
+    Recommendation: This test needs substantial rework to be production-ready.
     """
 
     INSTRUCTION: str = INSTRUCTION
 
     def __init__(self, *args, **kwargs):
-        """Initialize test with tracking for condensation events."""
+        """Initialize test with tracking for condensation events.
+
+        REVIEW: Missing conversation reference! The test needs to store the
+        conversation object to verify the View in verify_result(). Currently
+        conversation is only available in run_instructions(), which means
+        verify_result() cannot construct or examine the View. Add:
+        self.conversation: LocalConversation | None = None
+        """
         self.condensations: list[Condensation] = []
         self.hard_reset_condensation: Condensation | None = None
         self.normal_condensation: Condensation | None = None
@@ -114,6 +170,14 @@ class HardContextResetTest(BaseIntegrationTest):
         5. Verify sufficient events exist for normal condensation
         6. Explicitly condense again - should trigger normal condensation
         7. Continue the conversation to verify it still works after both condensations
+
+        REVIEW: Potential timing/ordering issue! The test calls condense() then
+        immediately checks event counts, but if condense() is async or if the
+        Condensation event is emitted with delay, the counts might be wrong or
+        the callback might not have been called yet. Should verify that:
+        1. condense() completes before continuing
+        2. The Condensation event is in conversation.state.events
+        3. The callback was invoked before proceeding
         """
         # Step 1: Send initial message but DON'T run yet
         conversation.send_message(message=self.instruction_message)
@@ -134,9 +198,9 @@ class HardContextResetTest(BaseIntegrationTest):
         conversation.run()
 
         # Step 5: Verify we now have many events from the run
-        # With the complex task, we should have 7-8+ bash tool calls
-        # plus other events. This ensures a valid condensation range exists
-        # (need 5+ for keep_first=4)
+        # With the task requiring separate commands, we should have 10+ bash
+        # tool calls plus other events. This ensures a valid condensation
+        # range exists (need 5+ for keep_first=4)
         self.events_after_first_run = len(conversation.state.events)
 
         # Step 6: Trigger another condensation - this should be normal (not hard reset)
@@ -163,8 +227,18 @@ class HardContextResetTest(BaseIntegrationTest):
         6. Summaries are non-empty and meaningful
         7. The conversation completed successfully (task outputs verified)
         8. The view is well-formed with both condensations
+
+        REVIEW: Criterion #8 is not implemented! The code below never constructs
+        or verifies a View object. It only checks that 2 Condensation events
+        exist, which is NOT the same as verifying the View is well-formed.
         """
         # 1. Verify initial state had insufficient events
+        # REVIEW: Magic number alert! Why 2? This assumes a specific condensation
+        # algorithm behavior that's never documented. The real requirement is:
+        # "not enough events for a valid condensation range given keep_first=4".
+        # This should be calculated based on the condenser's logic, not hardcoded.
+        # Also, if send_message() creates 2 events, would that trigger hard reset?
+        # This needs to be validated against the actual condenser implementation.
         if self.events_before_first_condense > 2:
             return TestResult(
                 success=False,
@@ -176,6 +250,14 @@ class HardContextResetTest(BaseIntegrationTest):
             )
 
         # 2. Verify after first run we have sufficient events
+        # REVIEW: Another magic number (5)! This assumes keep_first=4 requires
+        # 5+ events for normal condensation, but this is implementation-dependent.
+        # What if the condensation algorithm changes? What if "atomic units" are
+        # different from individual events? This should reference documented
+        # condenser behavior or calculate the threshold dynamically. Also, this
+        # check happens AFTER the second condense(), so if we have <5 events,
+        # we already know the second condensation was also a hard reset (test
+        # would have failed earlier checks).
         if self.events_after_first_run < 5:
             return TestResult(
                 success=False,
@@ -187,6 +269,15 @@ class HardContextResetTest(BaseIntegrationTest):
             )
 
         # 3. Verify we got exactly 2 condensations
+        # REVIEW: This check is fragile! "Exactly 2" assumes the condenser never
+        # auto-triggers during the test. But with max_size=1000, if the LLM
+        # generates verbose outputs, auto-condensation could occur, causing this
+        # test to fail even though the core functionality works. Consider:
+        # 1. Check for "at least 2" condensations
+        # 2. Verify the FIRST is hard reset and SECOND is normal
+        # 3. Or make max_size much higher to truly prevent auto-triggering
+        # Also, this doesn't verify ORDERING - if somehow the normal condensation
+        # happened before the hard reset, this check would still pass!
         if len(self.condensations) != 2:
             return TestResult(
                 success=False,
@@ -214,6 +305,12 @@ class HardContextResetTest(BaseIntegrationTest):
             )
 
         # Verify hard reset forgot events
+        # REVIEW: This check is too weak for a "hard reset"! It only verifies
+        # that SOME events were forgotten, not that ALL events were forgotten
+        # (which is what defines a hard reset). Should check:
+        # len(forgotten_event_ids) == events_before_first_condense
+        # to ensure every event in the history was condensed into the summary.
+        # As written, this could pass even if only 1 event was forgotten.
         if not self.hard_reset_condensation.forgotten_event_ids:
             return TestResult(
                 success=False,
@@ -251,6 +348,14 @@ class HardContextResetTest(BaseIntegrationTest):
             )
 
         # Verify normal condensation forgot some events
+        # REVIEW: This check doesn't verify the RIGHT events were forgotten!
+        # For a normal condensation with keep_first=4 and summary_offset>0,
+        # the test should verify that:
+        # 1. Events from the summary_offset range were forgotten
+        # 2. The first keep_first=4 events were NOT forgotten
+        # 3. Events after the condensation range were NOT forgotten
+        # Currently this just checks that SOME events were forgotten, which
+        # doesn't prove the condensation logic worked correctly.
         if not self.normal_condensation.forgotten_event_ids:
             return TestResult(
                 success=False,
@@ -270,6 +375,14 @@ class HardContextResetTest(BaseIntegrationTest):
         # 7. Verify actual task completion by checking for expected outputs
         # First task: create file, write numbers, display, count lines, cleanup
         # Second task: echo "Task completed successfully" and date
+        # REVIEW: This verification is weak and potentially incorrect:
+        # 1. String matching on outputs is fragile - "numbers.txt" could appear
+        #    in an error message like "failed to create numbers.txt"
+        # 2. Should verify the ACTUAL file contents/operations, not just strings
+        # 3. After cleanup (step 10), the test_dir should be gone - verify that!
+        # 4. Should check for the numbers 1, 2, 3 appearing in sequence
+        # 5. Should verify wc -l output shows 3 lines
+        # 6. More robust: parse structured output, verify success codes
         from openhands.sdk.event.llm_convertible import ObservationEvent
         from openhands.sdk.llm import content_to_str
 
@@ -299,6 +412,18 @@ class HardContextResetTest(BaseIntegrationTest):
             )
 
         # 8. Verify that both condensations are in the collected events
+        # REVIEW: CRITICAL GAP - No actual View verification!
+        # The test claims to verify "the view is well-formed" but NEVER
+        # constructs or examines a View object. This check only counts
+        # Condensation events, but doesn't verify:
+        # 1. That View.from_conversation_state() succeeds
+        # 2. That the View correctly includes both summaries
+        # 3. That forgotten events are excluded from the View
+        # 4. That the View structure is valid (summaries in right positions)
+        # 5. That the View can be serialized to LLM format
+        # 6. That the View respects summary_offset values
+        # Should add: view = View.from_conversation_state(conversation.state)
+        # and verify view.events structure, view.to_llm_messages(), etc.
         summary_count = sum(
             1 for event in self.collected_events if isinstance(event, Condensation)
         )
