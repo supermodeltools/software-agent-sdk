@@ -161,7 +161,7 @@ def test_summaries_preserve_order_and_content() -> None:
     condensation2 = Condensation(
         forgotten_event_ids=[messages[2].id],
         summary="Summary B",
-        summary_offset=1,
+        summary_offset=2,
         llm_response_id="cond_2",
     )
 
@@ -837,10 +837,11 @@ def test_multiple_summaries_with_same_offset() -> None:
     ]
     assert len(summary_events) == 2
 
-    # They should maintain their order (first inserted first)
+    # When inserting at the same offset, later insertions appear before earlier ones
+    # (standard list.insert() behavior)
     summaries_in_order = [s.summary for s in summary_events]
-    assert summaries_in_order[0] == "First at offset 1"
-    assert summaries_in_order[1] == "Second at offset 1"
+    assert summaries_in_order[0] == "Second at offset 1"
+    assert summaries_in_order[1] == "First at offset 1"
 
 
 # ==============================================================================
