@@ -472,7 +472,14 @@ class View(BaseModel):
         if condensation.summary is not None and condensation.summary_offset is not None:
             logger.debug(f"Inserting summary at offset {condensation.summary_offset}")
 
-            _new_summary_event = CondensationSummaryEvent(summary=condensation.summary)
+            # Use deterministic ID based on condensation's llm_response_id
+            # This enables subsequent condensations to reference and forget summaries
+            # Replace underscores with hyphens to comply with file persistence regex
+            summary_id = f"{condensation.llm_response_id.replace('_', '-')}-summary"
+            _new_summary_event = CondensationSummaryEvent(
+                id=summary_id,
+                summary=condensation.summary
+            )
             output.insert(condensation.summary_offset, _new_summary_event)
         
         return output

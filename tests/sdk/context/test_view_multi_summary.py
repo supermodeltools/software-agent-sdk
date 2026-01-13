@@ -225,7 +225,7 @@ def test_forget_first_summary_keeps_second() -> None:
 
     # To forget summary A, we need its event ID. Using deterministic ID approach:
     # summary_id = f"{condensation_id}_summary"
-    summary_a_id = f"cond_1_summary"
+    summary_a_id = f"cond-1-summary"
 
     condensation3 = Condensation(
         forgotten_event_ids=[summary_a_id],
@@ -284,7 +284,7 @@ def test_forget_middle_summary_keeps_others() -> None:
         llm_response_id="cond_3",
     )
 
-    summary_b_id = f"cond_2_summary"
+    summary_b_id = f"cond-2-summary"
 
     condensation4 = Condensation(
         forgotten_event_ids=[summary_b_id],
@@ -338,7 +338,7 @@ def test_forget_most_recent_summary() -> None:
         llm_response_id="cond_2",
     )
 
-    summary_b_id = f"cond_2_summary"
+    summary_b_id = f"cond-2-summary"
 
     condensation3 = Condensation(
         forgotten_event_ids=[summary_b_id],
@@ -385,7 +385,7 @@ def test_forget_summary_adjusts_later_summary_positions() -> None:
         llm_response_id="cond_2",
     )
 
-    summary_1_id = f"cond_1_summary"
+    summary_1_id = f"cond-1-summary"
 
     condensation3 = Condensation(
         forgotten_event_ids=[summary_1_id],
@@ -446,8 +446,8 @@ def test_forget_multiple_summaries_simultaneously() -> None:
         llm_response_id="cond_3",
     )
 
-    summary_a_id = f"cond_1_summary"
-    summary_c_id = f"cond_3_summary"
+    summary_a_id = f"cond-1-summary"
+    summary_c_id = f"cond-3-summary"
 
     condensation4 = Condensation(
         forgotten_event_ids=[summary_a_id, summary_c_id],
@@ -497,8 +497,8 @@ def test_forget_all_summaries() -> None:
         llm_response_id="cond_2",
     )
 
-    summary_a_id = f"cond_1_summary"
-    summary_b_id = f"cond_2_summary"
+    summary_a_id = f"cond-1-summary"
+    summary_b_id = f"cond-2-summary"
 
     condensation3 = Condensation(
         forgotten_event_ids=[summary_a_id, summary_b_id],
@@ -557,8 +557,8 @@ def test_sequential_condensations_each_forget_summary() -> None:
         llm_response_id="cond_3",
     )
 
-    summary_1_id = f"cond_1_summary"
-    summary_2_id = f"cond_2_summary"
+    summary_1_id = f"cond-1-summary"
+    summary_2_id = f"cond-2-summary"
 
     condensation4 = Condensation(
         forgotten_event_ids=[summary_1_id],
@@ -629,7 +629,7 @@ def test_summary_events_have_stable_identifiers() -> None:
     ), "Summary event ID should be stable across reconstructions"
 
     # Verify the ID follows the expected pattern
-    expected_id = f"stable_condensation_summary"
+    expected_id = f"stable-condensation-summary"
     assert summary1.id == expected_id, f"Summary ID should be {expected_id}"
 
 
@@ -672,8 +672,8 @@ def test_condensation_tracks_its_summary_event() -> None:
     summary_1 = [s for s in summary_events if s.summary == "First"][0]
     summary_2 = [s for s in summary_events if s.summary == "Second"][0]
 
-    assert summary_1.id == "cond_A_summary"
-    assert summary_2.id == "cond_B_summary"
+    assert summary_1.id == "cond-A-summary"
+    assert summary_2.id == "cond-B-summary"
 
 
 def test_can_reference_summary_from_previous_condensation() -> None:
@@ -863,7 +863,7 @@ def test_forget_events_and_summary_together() -> None:
         llm_response_id="cond_1",
     )
 
-    old_summary_id = f"cond_1_summary"
+    old_summary_id = f"cond-1-summary"
 
     condensation2 = Condensation(
         forgotten_event_ids=[messages[0].id, messages[2].id, old_summary_id],
