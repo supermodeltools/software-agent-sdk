@@ -86,32 +86,6 @@ class View(BaseModel):
     def __len__(self) -> int:
         return len(self.events)
 
-    @property
-    def most_recent_condensation(self) -> Condensation | None:
-        """Return the most recent condensation, or None if no condensations exist."""
-        return self.condensations[-1] if self.condensations else None
-
-    @property
-    def summary_event_index(self) -> int | None:
-        """Return the index of the summary event, or None if no summary exists."""
-        recent_condensation = self.most_recent_condensation
-        if (
-            recent_condensation is not None
-            and recent_condensation.summary is not None
-            and recent_condensation.summary_offset is not None
-        ):
-            return recent_condensation.summary_offset
-        return None
-
-    @property
-    def summary_event(self) -> CondensationSummaryEvent | None:
-        """Return the summary event, or None if no summary exists."""
-        if self.summary_event_index is not None:
-            event = self.events[self.summary_event_index]
-            if isinstance(event, CondensationSummaryEvent):
-                return event
-        return None
-
     @computed_field  # type: ignore[prop-decorator]
     @cached_property
     def manipulation_indices(self) -> list[int]:
