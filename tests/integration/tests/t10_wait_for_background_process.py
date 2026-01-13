@@ -13,6 +13,8 @@ from openhands.sdk.tool import Tool, register_tool
 from openhands.tools.file_editor import FileEditorTool
 from openhands.tools.terminal import TerminalTool
 from tests.integration.base import BaseIntegrationTest, TestResult
+from tests.integration.behavior_utils import get_conversation_summary
+from tests.integration.utils.llm_judge import judge_agent_behavior
 
 
 INSTRUCTION = (
@@ -68,55 +70,63 @@ class WaitForBackgroundProcessTest(BaseIntegrationTest):
 
     def verify_result(self) -> TestResult:
         """Verify that the agent waited for the process and got the result."""
-        # Check if the script was executed (output file should exist)
         if not os.path.exists(self.output_path):
-            # The agent might have used a different output file name
-            # Check if any log file exists with the expected content
-            for filename in os.listdir(self.workspace):
-                filepath = os.path.join(self.workspace, filename)
-                if os.path.isfile(filepath) and filename.endswith(".log"):
-                    with open(filepath) as f:
-                        content = f.read()
-                    if "FINAL_RESULT: SUCCESS_12345" in content:
-                        return TestResult(
-                            success=True,
-                            reason=(
-                                "Agent successfully waited for background process "
-                                "and captured the final result"
-                            ),
-                        )
-
-            # Check the agent's conversation for evidence it got the result
-            for event in self.collected_events:
-                event_str = str(event)
-                if "SUCCESS_12345" in event_str:
-                    return TestResult(
-                        success=True,
-                        reason=(
-                            "Agent successfully waited for background process "
-                            "and reported the final result"
-                        ),
-                    )
-
             return TestResult(
                 success=False,
-                reason="No evidence that agent waited for and captured process output",
+                reason=(
+                    "Expected output.log not found. Agent may not have executed script."
+                ),
             )
 
-        # Output file exists at expected path
         with open(self.output_path) as f:
             content = f.read()
 
         if "FINAL_RESULT: SUCCESS_12345" not in content:
             return TestResult(
                 success=False,
-                reason=f"Output file missing expected result. Content: {content}",
+                reason=f"output.log missing expected result. Content: {content}",
+            )
+
+        conversation_summary = get_conversation_summary(self.collected_events)
+        evaluation_criteria = (
+            "Approve only if the agent used the required background-process waiting "
+            "pattern:\n"
+            "1) used nohup to start the process in the background with output "
+            "redirection\n"
+            "2) captured PID via $!\n"
+            "3) waited for completion using the shell wait builtin (wait $PID)\n"
+            "The agent may chain commands with && or ; as long as the above are "
+            "clearly used."
+        )
+
+        judgment = judge_agent_behavior(
+            user_instruction=INSTRUCTION,
+            conversation_summary=conversation_summary,
+            evaluation_criteria=evaluation_criteria,
+        )
+
+        self.add_judge_usage(
+            prompt_tokens=judgment.prompt_tokens,
+            completion_tokens=judgment.completion_tokens,
+            cost=judgment.cost,
+        )
+
+        if not judgment.approved:
+            return TestResult(
+                success=False,
+                reason=(
+                    "Agent did not demonstrate the required nohup/PID/wait pattern. "
+                    f"Judge reasoning: {judgment.reasoning} "
+                    f"(confidence={judgment.confidence:.2f})"
+                ),
             )
 
         return TestResult(
             success=True,
             reason=(
-                "Agent successfully waited for background process "
-                "and captured the final result"
+                "Agent produced the expected output and used the required "
+                "nohup/PID/wait pattern. "
+                f"Judge reasoning: {judgment.reasoning} "
+                f"(confidence={judgment.confidence:.2f})"
             ),
         )
