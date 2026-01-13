@@ -87,14 +87,14 @@ class WaitForBackgroundProcessTest(BaseIntegrationTest):
 
         conversation_summary = get_conversation_summary(self.collected_events)
         evaluation_criteria = (
-            "Approve only if the agent used the required background-process waiting "
-            "pattern:\n"
-            "1) used nohup to start the process in the background with output "
-            "redirection\n"
-            "2) captured PID via $!\n"
-            "3) waited for completion using the shell wait builtin (wait $PID)\n"
-            "The agent may chain commands with && or ; as long as the above are "
-            "clearly used."
+            "Approve only if the agent clearly demonstrates these behaviors:\n"
+            "1) starts the script in the background with output redirected to "
+            "output.log (nohup is preferred but not required)\n"
+            "2) captures or identifies the background process PID (using $! is "
+            "preferred)\n"
+            "3) waits for completion using the shell wait builtin (wait <pid> or "
+            "wait $!)\n"
+            "The agent may chain commands with && or ;."
         )
 
         judgment = judge_agent_behavior(
