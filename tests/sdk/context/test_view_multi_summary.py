@@ -69,9 +69,7 @@ def test_multiple_summaries_at_different_offsets() -> None:
     view = View.from_events(events)
 
     # Find all CondensationSummaryEvents in the view
-    summary_events = [
-        e for e in view.events if isinstance(e, CondensationSummaryEvent)
-    ]
+    summary_events = [e for e in view.events if isinstance(e, CondensationSummaryEvent)]
 
     assert len(summary_events) == 2, "Both summaries should be present in view"
 
@@ -126,9 +124,7 @@ def test_multiple_summaries_from_sequential_condensations() -> None:
 
     view = View.from_events(events)
 
-    summary_events = [
-        e for e in view.events if isinstance(e, CondensationSummaryEvent)
-    ]
+    summary_events = [e for e in view.events if isinstance(e, CondensationSummaryEvent)]
 
     assert len(summary_events) == 3, "All three summaries should be present"
 
@@ -225,7 +221,7 @@ def test_forget_first_summary_keeps_second() -> None:
 
     # To forget summary A, we need its event ID. Using deterministic ID approach:
     # summary_id = f"{condensation_id}_summary"
-    summary_a_id = f"cond-1-summary"
+    summary_a_id = "cond-1-summary"
 
     condensation3 = Condensation(
         forgotten_event_ids=[summary_a_id],
@@ -245,9 +241,7 @@ def test_forget_first_summary_keeps_second() -> None:
 
     view = View.from_events(events)
 
-    summary_events = [
-        e for e in view.events if isinstance(e, CondensationSummaryEvent)
-    ]
+    summary_events = [e for e in view.events if isinstance(e, CondensationSummaryEvent)]
 
     assert len(summary_events) == 1, "Only summary B should remain"
     assert summary_events[0].summary == "Summary B"
@@ -284,7 +278,7 @@ def test_forget_middle_summary_keeps_others() -> None:
         llm_response_id="cond_3",
     )
 
-    summary_b_id = f"cond-2-summary"
+    summary_b_id = "cond-2-summary"
 
     condensation4 = Condensation(
         forgotten_event_ids=[summary_b_id],
@@ -305,9 +299,7 @@ def test_forget_middle_summary_keeps_others() -> None:
 
     view = View.from_events(events)
 
-    summary_events = [
-        e for e in view.events if isinstance(e, CondensationSummaryEvent)
-    ]
+    summary_events = [e for e in view.events if isinstance(e, CondensationSummaryEvent)]
 
     assert len(summary_events) == 2, "Summaries A and C should remain"
 
@@ -338,7 +330,7 @@ def test_forget_most_recent_summary() -> None:
         llm_response_id="cond_2",
     )
 
-    summary_b_id = f"cond-2-summary"
+    summary_b_id = "cond-2-summary"
 
     condensation3 = Condensation(
         forgotten_event_ids=[summary_b_id],
@@ -356,9 +348,7 @@ def test_forget_most_recent_summary() -> None:
 
     view = View.from_events(events)
 
-    summary_events = [
-        e for e in view.events if isinstance(e, CondensationSummaryEvent)
-    ]
+    summary_events = [e for e in view.events if isinstance(e, CondensationSummaryEvent)]
 
     assert len(summary_events) == 1, "Only summary A should remain"
     assert summary_events[0].summary == "Summary A"
@@ -385,7 +375,7 @@ def test_forget_summary_adjusts_later_summary_positions() -> None:
         llm_response_id="cond_2",
     )
 
-    summary_1_id = f"cond-1-summary"
+    summary_1_id = "cond-1-summary"
 
     condensation3 = Condensation(
         forgotten_event_ids=[summary_1_id],
@@ -446,8 +436,8 @@ def test_forget_multiple_summaries_simultaneously() -> None:
         llm_response_id="cond_3",
     )
 
-    summary_a_id = f"cond-1-summary"
-    summary_c_id = f"cond-3-summary"
+    summary_a_id = "cond-1-summary"
+    summary_c_id = "cond-3-summary"
 
     condensation4 = Condensation(
         forgotten_event_ids=[summary_a_id, summary_c_id],
@@ -468,9 +458,7 @@ def test_forget_multiple_summaries_simultaneously() -> None:
 
     view = View.from_events(events)
 
-    summary_events = [
-        e for e in view.events if isinstance(e, CondensationSummaryEvent)
-    ]
+    summary_events = [e for e in view.events if isinstance(e, CondensationSummaryEvent)]
 
     assert len(summary_events) == 1, "Only summary B should remain"
     assert summary_events[0].summary == "Summary B"
@@ -497,8 +485,8 @@ def test_forget_all_summaries() -> None:
         llm_response_id="cond_2",
     )
 
-    summary_a_id = f"cond-1-summary"
-    summary_b_id = f"cond-2-summary"
+    summary_a_id = "cond-1-summary"
+    summary_b_id = "cond-2-summary"
 
     condensation3 = Condensation(
         forgotten_event_ids=[summary_a_id, summary_b_id],
@@ -517,9 +505,7 @@ def test_forget_all_summaries() -> None:
 
     view = View.from_events(events)
 
-    summary_events = [
-        e for e in view.events if isinstance(e, CondensationSummaryEvent)
-    ]
+    summary_events = [e for e in view.events if isinstance(e, CondensationSummaryEvent)]
 
     assert len(summary_events) == 0, "No summaries should remain"
     assert len(view.events) == 3, "Only message events should remain"
@@ -557,8 +543,8 @@ def test_sequential_condensations_each_forget_summary() -> None:
         llm_response_id="cond_3",
     )
 
-    summary_1_id = f"cond-1-summary"
-    summary_2_id = f"cond-2-summary"
+    summary_1_id = "cond-1-summary"
+    summary_2_id = "cond-2-summary"
 
     condensation4 = Condensation(
         forgotten_event_ids=[summary_1_id],
@@ -586,9 +572,7 @@ def test_sequential_condensations_each_forget_summary() -> None:
 
     view = View.from_events(events)
 
-    summary_events = [
-        e for e in view.events if isinstance(e, CondensationSummaryEvent)
-    ]
+    summary_events = [e for e in view.events if isinstance(e, CondensationSummaryEvent)]
 
     assert len(summary_events) == 1, "Only summary 3 should remain"
     assert summary_events[0].summary == "Summary 3"
@@ -624,12 +608,12 @@ def test_summary_events_have_stable_identifiers() -> None:
     view2 = View.from_events(events)
     summary2 = [e for e in view2.events if isinstance(e, CondensationSummaryEvent)][0]
 
-    assert (
-        summary1.id == summary2.id
-    ), "Summary event ID should be stable across reconstructions"
+    assert summary1.id == summary2.id, (
+        "Summary event ID should be stable across reconstructions"
+    )
 
     # Verify the ID follows the expected pattern
-    expected_id = f"stable-condensation-summary"
+    expected_id = "stable-condensation-summary"
     assert summary1.id == expected_id, f"Summary ID should be {expected_id}"
 
 
@@ -664,9 +648,7 @@ def test_condensation_tracks_its_summary_event() -> None:
 
     view = View.from_events(events)
 
-    summary_events = [
-        e for e in view.events if isinstance(e, CondensationSummaryEvent)
-    ]
+    summary_events = [e for e in view.events if isinstance(e, CondensationSummaryEvent)]
 
     # Verify we can identify which summary came from which condensation
     summary_1 = [s for s in summary_events if s.summary == "First"][0]
@@ -832,9 +814,7 @@ def test_multiple_summaries_with_same_offset() -> None:
     view = View.from_events(events)
 
     # Both summaries should be in the view
-    summary_events = [
-        e for e in view.events if isinstance(e, CondensationSummaryEvent)
-    ]
+    summary_events = [e for e in view.events if isinstance(e, CondensationSummaryEvent)]
     assert len(summary_events) == 2
 
     # When inserting at the same offset, later insertions appear before earlier ones
@@ -864,7 +844,7 @@ def test_forget_events_and_summary_together() -> None:
         llm_response_id="cond_1",
     )
 
-    old_summary_id = f"cond-1-summary"
+    old_summary_id = "cond-1-summary"
 
     condensation2 = Condensation(
         forgotten_event_ids=[messages[0].id, messages[2].id, old_summary_id],
@@ -886,9 +866,7 @@ def test_forget_events_and_summary_together() -> None:
 
     # Should have forgotten: Msg 0, Msg 2, old summary
     # Should remain: Msg 1, Msg 3, new summary
-    summary_events = [
-        e for e in view.events if isinstance(e, CondensationSummaryEvent)
-    ]
+    summary_events = [e for e in view.events if isinstance(e, CondensationSummaryEvent)]
 
     assert len(summary_events) == 1
     assert summary_events[0].summary == "New summary"
@@ -1088,9 +1066,7 @@ def test_condensation_without_summary_no_summary_event_created() -> None:
 
     view = View.from_events(events)
 
-    summary_events = [
-        e for e in view.events if isinstance(e, CondensationSummaryEvent)
-    ]
+    summary_events = [e for e in view.events if isinstance(e, CondensationSummaryEvent)]
 
     assert len(summary_events) == 0, "No summary should be created"
     assert len(view.events) == 2, "Only Msg 0 and Msg 2 should remain"
@@ -1145,9 +1121,7 @@ def test_forget_nonexistent_summary_is_noop() -> None:
     view = View.from_events(events)
 
     # Existing summary should still be there
-    summary_events = [
-        e for e in view.events if isinstance(e, CondensationSummaryEvent)
-    ]
+    summary_events = [e for e in view.events if isinstance(e, CondensationSummaryEvent)]
 
     assert len(summary_events) == 1
     assert summary_events[0].summary == "Existing summary"
@@ -1193,9 +1167,7 @@ def test_multiple_condensations_same_summary_offset() -> None:
     view = View.from_events(events)
 
     # All three summaries should be present
-    summary_events = [
-        e for e in view.events if isinstance(e, CondensationSummaryEvent)
-    ]
+    summary_events = [e for e in view.events if isinstance(e, CondensationSummaryEvent)]
 
     assert len(summary_events) == 3
 

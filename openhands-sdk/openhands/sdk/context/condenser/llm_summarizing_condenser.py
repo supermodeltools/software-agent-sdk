@@ -17,7 +17,6 @@ from openhands.sdk.context.prompts import render_template
 from openhands.sdk.context.view import View
 from openhands.sdk.event.base import LLMConvertibleEvent
 from openhands.sdk.event.condenser import Condensation
-from openhands.sdk.event.llm_convertible import MessageEvent
 from openhands.sdk.llm import LLM, Message, TextContent
 from openhands.sdk.observability.laminar import observe
 

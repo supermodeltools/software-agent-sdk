@@ -455,7 +455,7 @@ class View(BaseModel):
         events: Sequence[LLMConvertibleEvent], condensation: Condensation
     ) -> list[LLMConvertibleEvent]:
         """Apply a single condensation to a list of events.
-        
+
         Events marked to be forgotten in the condensation will be removed, and if there
         is summary metadata present, a CondensationSummaryEvent will be inserted at the
         specified offset.
@@ -477,11 +477,10 @@ class View(BaseModel):
             # Replace underscores with hyphens to comply with file persistence regex
             summary_id = f"{condensation.llm_response_id.replace('_', '-')}-summary"
             _new_summary_event = CondensationSummaryEvent(
-                id=summary_id,
-                summary=condensation.summary
+                id=summary_id, summary=condensation.summary
             )
             output.insert(condensation.summary_offset, _new_summary_event)
-        
+
         return output
 
     @staticmethod
@@ -533,6 +532,8 @@ class View(BaseModel):
 
         return View(
             events=output,
-            unhandled_condensation_request=View.unhandled_condensation_request_exists(events),
+            unhandled_condensation_request=View.unhandled_condensation_request_exists(
+                events
+            ),
             condensations=condensations,
         )
