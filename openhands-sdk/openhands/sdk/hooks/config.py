@@ -136,7 +136,7 @@ class HookConfig(BaseModel):
                     hooks=[
                         HookDefinition(
                             type=HookType.COMMAND,
-                            command="bash .openhands/agent_finish.sh",
+                            command="bash .openhands/agent_finish.sh || true",
                             timeout=600,
                         )
                     ],

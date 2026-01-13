@@ -136,7 +136,7 @@ class TestHookConfig:
             assert config.has_hooks_for_event(HookEventType.STOP)
             hooks = config.get_hooks_for_event(HookEventType.STOP, None)
             assert len(hooks) == 1
-            assert hooks[0].command == "bash .openhands/agent_finish.sh"
+            assert hooks[0].command == "bash .openhands/agent_finish.sh || true"
             assert hooks[0].timeout == 600
 
     def test_get_hooks_filters_by_tool_name(self):
