@@ -435,6 +435,33 @@ class View(BaseModel):
         return threshold
 
     @staticmethod
+    def apply_condensation(
+        events: Sequence[Event], condensation: Condensation
+    ) -> Sequence[Event]:
+        """Apply a single condensation to a list of events.
+        
+        Events marked to be forgotten in the condensation will be removed, and if there
+        is summary metadata present, a CondensationSummaryEvent will be inserted at the
+        specified offset.
+        """
+        output: list[Event] = []
+
+        # Copy the events into output, skipping forgotten events.
+        for event in events:
+            if event.id in condensation.forgotten_event_ids:
+                continue
+            output.append(event)
+
+        # Insert the condensation summary event at the specified offset, if present.
+        if condensation.summary is not None and condensation.summary_offset is not None:
+            logger.debug(f"Inserting summary at offset {condensation.summary_offset}")
+
+            _new_summary_event = CondensationSummaryEvent(summary=condensation.summary)
+            output.insert(condensation.summary_offset, _new_summary_event)
+        
+        return output
+
+    @staticmethod
     def from_events(events: Sequence[Event]) -> View:
         """Create a view from a list of events, respecting the semantics of any
         condensation events.
