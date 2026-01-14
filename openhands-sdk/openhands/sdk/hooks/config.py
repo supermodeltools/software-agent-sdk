@@ -3,9 +3,10 @@
 import json
 import logging
 import re
+import warnings
 from enum import Enum
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import Any
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -13,6 +14,26 @@ from openhands.sdk.hooks.types import HookEventType
 
 
 logger = logging.getLogger(__name__)
+
+
+def _pascal_to_snake(name: str) -> str:
+    """Convert PascalCase to snake_case."""
+    # Insert underscore before uppercase letters and lowercase everything
+    result = re.sub(r"(?<!^)(?=[A-Z])", "_", name).lower()
+    return result
+
+
+# Valid snake_case field names for hook events
+_VALID_HOOK_FIELDS: frozenset[str] = frozenset(
+    {
+        "pre_tool_use",
+        "post_tool_use",
+        "user_prompt_submit",
+        "session_start",
+        "session_end",
+        "stop",
+    }
+)
 
 
 class HookType(str, Enum):
@@ -121,45 +142,74 @@ class HookConfig(BaseModel):
         description="Hooks that run when the agent attempts to stop",
     )
 
-    # Mapping from HookEventType PascalCase values to snake_case field names
-    EVENT_FIELD_MAP: ClassVar[dict[str, str]] = {
-        "PreToolUse": "pre_tool_use",
-        "PostToolUse": "post_tool_use",
-        "UserPromptSubmit": "user_prompt_submit",
-        "SessionStart": "session_start",
-        "SessionEnd": "session_end",
-        "Stop": "stop",
-    }
-
-    @property
-    def hooks(self) -> dict[str, list[HookMatcher]]:
-        """Return hooks as a dict for backward compatibility."""
-        result: dict[str, list[HookMatcher]] = {}
-        for event_key, field_name in self.EVENT_FIELD_MAP.items():
-            matchers = getattr(self, field_name)
-            if matchers:
-                result[event_key] = matchers
-        return result
+    def is_empty(self) -> bool:
+        """Check if this config has no hooks configured."""
+        return not any(
+            [
+                self.pre_tool_use,
+                self.post_tool_use,
+                self.user_prompt_submit,
+                self.session_start,
+                self.session_end,
+                self.stop,
+            ]
+        )
 
     @model_validator(mode="before")
     @classmethod
     def _normalize_hooks_input(cls, data: Any) -> Any:
-        """Support JSON format with PascalCase keys and 'hooks' wrapper."""
+        """Support JSON format with PascalCase keys and 'hooks' wrapper.
+
+        .. deprecated:: 1.10
+            The legacy format with 'hooks' wrapper and PascalCase keys is deprecated.
+            Use snake_case field names directly instead.
+        """
         if not isinstance(data, dict):
             return data
 
+        has_legacy_format = False
+
         # Unwrap legacy format: {"hooks": {"PreToolUse": [...]}}
         if "hooks" in data and len(data) == 1:
+            has_legacy_format = True
             data = data["hooks"]
 
         # Convert PascalCase keys to snake_case field names
         normalized: dict[str, Any] = {}
+        seen_fields: set[str] = set()
+
         for key, value in data.items():
-            if key in cls.EVENT_FIELD_MAP:
-                normalized[cls.EVENT_FIELD_MAP[key]] = value
-            else:
-                # Keep snake_case keys as-is
-                normalized[key] = value
+            snake_key = _pascal_to_snake(key)
+            is_pascal_case = snake_key != key
+
+            if is_pascal_case:
+                has_legacy_format = True
+                # Validate that PascalCase key maps to a known field
+                if snake_key not in _VALID_HOOK_FIELDS:
+                    valid_types = ", ".join(sorted(_VALID_HOOK_FIELDS))
+                    raise ValueError(
+                        f"Unknown event type '{key}'. Valid types: {valid_types}"
+                    )
+
+            # Check for duplicate keys (both PascalCase and snake_case provided)
+            if snake_key in seen_fields:
+                raise ValueError(
+                    f"Duplicate hook event: both '{key}' and its snake_case "
+                    f"equivalent '{snake_key}' were provided"
+                )
+            seen_fields.add(snake_key)
+            normalized[snake_key] = value
+
+        if has_legacy_format:
+            warnings.warn(
+                "HookConfig with 'hooks' wrapper or PascalCase keys is deprecated "
+                "and will be removed in version 1.10. Use snake_case field names "
+                "directly: pre_tool_use, post_tool_use, user_prompt_submit, "
+                "session_start, session_end, stop.",
+                DeprecationWarning,
+                stacklevel=6,
+            )
+
         return normalized
 
     @classmethod
@@ -216,10 +266,8 @@ class HookConfig(BaseModel):
         return cls.model_validate(data)
 
     def _get_matchers_for_event(self, event_type: HookEventType) -> list[HookMatcher]:
-        """Get matchers for an event type using the field mapping."""
-        field_name = self.EVENT_FIELD_MAP.get(event_type.value)
-        if field_name is None:
-            return []
+        """Get matchers for an event type."""
+        field_name = _pascal_to_snake(event_type.value)
         return getattr(self, field_name, [])
 
     def get_hooks_for_event(
@@ -240,19 +288,10 @@ class HookConfig(BaseModel):
         matchers = self._get_matchers_for_event(event_type)
         return len(matchers) > 0
 
-    def to_dict(self) -> dict[str, Any]:
-        """Convert to dictionary format for serialization (JSON-compatible)."""
-        hooks_dict: dict[str, list[dict[str, Any]]] = {}
-        for event_key, field_name in self.EVENT_FIELD_MAP.items():
-            matchers = getattr(self, field_name)
-            if matchers:
-                hooks_dict[event_key] = [m.model_dump(mode="json") for m in matchers]
-        return {"hooks": hooks_dict}
-
     def save(self, path: str | Path) -> None:
-        """Save hook configuration to a JSON file."""
+        """Save hook configuration to a JSON file using snake_case field names."""
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
 
         with open(path, "w") as f:
-            json.dump(self.to_dict(), f, indent=2)
+            json.dump(self.model_dump(mode="json", exclude_defaults=True), f, indent=2)

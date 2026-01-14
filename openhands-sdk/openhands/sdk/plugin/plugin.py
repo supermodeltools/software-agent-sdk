@@ -240,7 +240,7 @@ def _load_hooks(plugin_dir: Path) -> HookConfig | None:
     try:
         hook_config = HookConfig.load(path=hooks_json)
         # load() returns empty config on error, check if it has hooks
-        if hook_config.hooks:
+        if not hook_config.is_empty():
             return hook_config
         return None
     except Exception as e:

@@ -91,7 +91,7 @@ class TestHookConfig:
     def test_load_missing_file_returns_empty(self):
         """Test that loading missing file returns empty config."""
         config = HookConfig.load("/nonexistent/path/hooks.json")
-        assert config.hooks == {}
+        assert config.is_empty()
 
     def test_load_discovers_config_in_working_dir(self):
         """Test that load() discovers .openhands/hooks.json in working_dir."""
@@ -165,8 +165,8 @@ class TestHookConfig:
         assert hooks[0].command == "block.sh"
         assert hooks[0].timeout == 10
 
-    def test_backward_compatible_json_round_trip(self):
-        """Test that to_dict produces JSON-compatible output matching old format."""
+    def test_json_round_trip(self):
+        """Test that model_dump produces JSON-compatible output for round-trip."""
         config = HookConfig(
             pre_tool_use=[
                 HookMatcher(
@@ -176,25 +176,58 @@ class TestHookConfig:
             ]
         )
 
-        # to_dict should produce the old JSON format
-        output = config.to_dict()
-        assert "hooks" in output
-        assert "PreToolUse" in output["hooks"]
-        assert output["hooks"]["PreToolUse"][0]["matcher"] == "terminal"
-        assert output["hooks"]["PreToolUse"][0]["hooks"][0]["type"] == "command"
+        # model_dump should produce snake_case format
+        output = config.model_dump(mode="json", exclude_defaults=True)
+        assert "pre_tool_use" in output
+        assert output["pre_tool_use"][0]["matcher"] == "terminal"
+        assert output["pre_tool_use"][0]["hooks"][0]["command"] == "test.sh"
 
         # Should be able to reload from the output
-        reloaded = HookConfig.from_dict(output)
+        reloaded = HookConfig.model_validate(output)
         assert reloaded.pre_tool_use == config.pre_tool_use
 
-    def test_hooks_property_backward_compatibility(self):
-        """Test the hooks property returns dict for backward compatibility."""
-        config = HookConfig(
-            pre_tool_use=[HookMatcher(hooks=[HookDefinition(command="a.sh")])],
-            stop=[HookMatcher(hooks=[HookDefinition(command="b.sh")])],
-        )
+    def test_is_empty(self):
+        """Test is_empty() correctly identifies empty configs."""
+        empty_config = HookConfig()
+        assert empty_config.is_empty()
 
-        hooks = config.hooks
-        assert "PreToolUse" in hooks
-        assert "Stop" in hooks
-        assert "PostToolUse" not in hooks  # Empty lists not included
+        non_empty_config = HookConfig(
+            pre_tool_use=[HookMatcher(hooks=[HookDefinition(command="a.sh")])],
+        )
+        assert not non_empty_config.is_empty()
+
+    def test_legacy_format_emits_deprecation_warning(self):
+        """Test that legacy format with PascalCase keys emits deprecation warning."""
+        import warnings
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            HookConfig.from_dict(
+                {"hooks": {"PreToolUse": [{"hooks": [{"command": "test.sh"}]}]}}
+            )
+
+            # Check that a deprecation warning was issued
+            assert len(w) == 1
+            assert issubclass(w[0].category, DeprecationWarning)
+            assert "1.10" in str(w[0].message)
+
+    def test_duplicate_keys_raises_error(self):
+        """Test that providing both PascalCase and snake_case raises error."""
+        import pytest
+
+        with pytest.raises(ValueError, match="Duplicate hook event"):
+            HookConfig.from_dict(
+                {
+                    "PreToolUse": [{"hooks": [{"command": "a.sh"}]}],
+                    "pre_tool_use": [{"hooks": [{"command": "b.sh"}]}],
+                }
+            )
+
+    def test_unknown_event_type_raises_error(self):
+        """Test that typos in event types raise helpful errors."""
+        import pytest
+
+        with pytest.raises(ValueError, match="Unknown event type.*PreToolExecute"):
+            HookConfig.from_dict(
+                {"PreToolExecute": [{"hooks": [{"command": "test.sh"}]}]}
+            )
