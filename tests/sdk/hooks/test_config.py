@@ -200,6 +200,8 @@ class TestHookConfig:
         """Test that legacy format with PascalCase keys emits deprecation warning."""
         import warnings
 
+        from deprecation import DeprecatedWarning
+
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
             HookConfig.from_dict(
@@ -208,7 +210,7 @@ class TestHookConfig:
 
             # Check that a deprecation warning was issued
             assert len(w) == 1
-            assert issubclass(w[0].category, DeprecationWarning)
+            assert issubclass(w[0].category, DeprecatedWarning)
             assert "1.10" in str(w[0].message)
 
     def test_duplicate_keys_raises_error(self):

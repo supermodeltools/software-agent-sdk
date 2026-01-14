@@ -3,7 +3,6 @@
 import json
 import logging
 import re
-import warnings
 from enum import Enum
 from pathlib import Path
 from typing import Any
@@ -11,6 +10,7 @@ from typing import Any
 from pydantic import BaseModel, Field, model_validator
 
 from openhands.sdk.hooks.types import HookEventType
+from openhands.sdk.utils.deprecation import warn_deprecated
 
 
 logger = logging.getLogger(__name__)
@@ -201,13 +201,16 @@ class HookConfig(BaseModel):
             normalized[snake_key] = value
 
         if has_legacy_format:
-            warnings.warn(
-                "HookConfig with 'hooks' wrapper or PascalCase keys is deprecated "
-                "and will be removed in version 1.10. Use snake_case field names "
-                "directly: pre_tool_use, post_tool_use, user_prompt_submit, "
-                "session_start, session_end, stop.",
-                DeprecationWarning,
-                stacklevel=6,
+            warn_deprecated(
+                "HookConfig with 'hooks' wrapper or PascalCase keys",
+                deprecated_in="1.0",
+                removed_in="1.10",
+                details=(
+                    "Use snake_case field names directly: pre_tool_use, "
+                    "post_tool_use, user_prompt_submit, session_start, "
+                    "session_end, stop."
+                ),
+                stacklevel=7,
             )
 
         return normalized
