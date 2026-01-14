@@ -197,7 +197,7 @@ class TestHookConfig:
         assert not non_empty_config.is_empty()
 
     def test_legacy_format_emits_deprecation_warning(self):
-        """Test that legacy format with PascalCase keys emits deprecation warning."""
+        """Test that legacy format emits a warning to encourage the preferred format."""
         import warnings
 
         from deprecation import DeprecatedWarning
@@ -208,10 +208,9 @@ class TestHookConfig:
                 {"hooks": {"PreToolUse": [{"hooks": [{"command": "test.sh"}]}]}}
             )
 
-            # Check that a deprecation warning was issued
+            # Check that a warning was issued (we keep this format supported).
             assert len(w) == 1
             assert issubclass(w[0].category, DeprecatedWarning)
-            assert "1.10" in str(w[0].message)
 
     def test_duplicate_keys_raises_error(self):
         """Test that providing both PascalCase and snake_case raises error."""

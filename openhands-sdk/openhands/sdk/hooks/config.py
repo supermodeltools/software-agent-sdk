@@ -164,9 +164,8 @@ class HookConfig(BaseModel):
     def _normalize_hooks_input(cls, data: Any) -> Any:
         """Support JSON format with PascalCase keys and 'hooks' wrapper.
 
-        .. deprecated:: 1.10
-            The legacy format with 'hooks' wrapper and PascalCase keys is deprecated.
-            Use snake_case field names directly instead.
+        We intentionally continue supporting these formats for interoperability with
+        existing integrations (e.g. Claude Code plugin hook files).
         """
         if not isinstance(data, dict):
             return data
@@ -209,15 +208,20 @@ class HookConfig(BaseModel):
             seen_fields.add(snake_key)
             normalized[snake_key] = value
 
+        # Preserve backwards compatibility without deprecating the legacy formats.
+        # We still emit a warning to encourage the snake_case format, but do not
+        # mark it for removal.
         if has_legacy_format:
             warn_deprecated(
-                "HookConfig with 'hooks' wrapper or PascalCase keys",
-                deprecated_in="1.8.2",
-                removed_in="1.10",
+                "HookConfig legacy JSON format ('hooks' wrapper and/or "
+                "PascalCase keys)",
+                deprecated_in="0.0.0",
+                removed_in=None,
                 details=(
-                    "Use snake_case field names directly: pre_tool_use, "
-                    "post_tool_use, user_prompt_submit, session_start, "
-                    "session_end, stop."
+                    "This format is still supported for interoperability. "
+                    "Preferred format uses snake_case keys directly: pre_tool_use, "
+                    "post_tool_use, user_prompt_submit, session_start, session_end, "
+                    "stop."
                 ),
                 stacklevel=7,
             )
