@@ -6,6 +6,17 @@ from openhands.tools.browser_use.logging_fix import LogSafeBrowserUseServer
 
 logger = get_logger(__name__)
 
+# rrweb loader script - injected into every page to make rrweb available
+RRWEB_LOADER_SCRIPT = """
+(function() {
+    if (window.__rrweb_loaded) return;
+    window.__rrweb_loaded = true;
+    var s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/@rrweb/record@latest/dist/record.umd.min.cjs';
+    document.head.appendChild(s);
+})();
+"""
+
 
 class CustomBrowserUseServer(LogSafeBrowserUseServer):
     """
@@ -32,14 +43,18 @@ class CustomBrowserUseServer(LogSafeBrowserUseServer):
 
         Uses Page.addScriptToEvaluateOnNewDocument to inject scripts that
         will run on every new document before the page's scripts execute.
+        Always injects rrweb loader, plus any additional configured scripts.
         """
-        if not self.browser_session or not self._inject_scripts:
+        if not self.browser_session:
             return
+
+        # Always include rrweb loader, plus any user-configured scripts
+        scripts_to_inject = [RRWEB_LOADER_SCRIPT] + self._inject_scripts
 
         try:
             cdp_session = await self.browser_session.get_or_create_cdp_session()
 
-            for script in self._inject_scripts:
+            for script in scripts_to_inject:
                 result = await cdp_session.cdp_client.send.Page.addScriptToEvaluateOnNewDocument(
                     params={"source": script, "runImmediately": True},
                     session_id=cdp_session.session_id,
@@ -50,10 +65,69 @@ class CustomBrowserUseServer(LogSafeBrowserUseServer):
                     logger.debug(f"Injected script with identifier: {script_id}")
 
             logger.info(
-                f"Injected {len(self._inject_scripts)} script(s) into browser session"
+                f"Injected {len(scripts_to_inject)} script(s) into browser session"
             )
         except Exception as e:
             logger.warning(f"Failed to inject scripts: {e}")
+
+    async def _start_recording(self) -> str:
+        """Start rrweb session recording."""
+        if not self.browser_session:
+            return "Error: No browser session active"
+
+        try:
+            cdp_session = await self.browser_session.get_or_create_cdp_session()
+            result = await cdp_session.cdp_client.send.Runtime.evaluate(
+                params={
+                    "expression": """
+                        (function() {
+                            if (window.__rrweb_stopFn) return 'Already recording';
+                            if (typeof rrwebRecord === 'undefined') return 'rrweb not loaded yet - try again after page loads';
+                            window.__rrweb_events = [];
+                            window.__rrweb_stopFn = rrwebRecord.record({
+                                emit: function(event) {
+                                    window.__rrweb_events.push(event);
+                                }
+                            });
+                            return 'Recording started';
+                        })();
+                    """,
+                    "returnByValue": True,
+                },
+                session_id=cdp_session.session_id,
+            )
+            return result.get("result", {}).get("value", "Unknown error")
+        except Exception as e:
+            logger.exception("Error starting recording", exc_info=e)
+            return f"Error starting recording: {str(e)}"
+
+    async def _stop_recording(self) -> str:
+        """Stop rrweb recording and return events as JSON."""
+        if not self.browser_session:
+            return '{"error": "No browser session active"}'
+
+        try:
+            cdp_session = await self.browser_session.get_or_create_cdp_session()
+            result = await cdp_session.cdp_client.send.Runtime.evaluate(
+                params={
+                    "expression": """
+                        (function() {
+                            if (!window.__rrweb_stopFn) return JSON.stringify({error: 'Not recording'});
+                            window.__rrweb_stopFn();
+                            var events = window.__rrweb_events || [];
+                            window.__rrweb_stopFn = null;
+                            window.__rrweb_events = [];
+                            return JSON.stringify({events: events, count: events.length});
+                        })();
+                    """,
+                    "returnByValue": True,
+                },
+                session_id=cdp_session.session_id,
+            )
+            return result.get("result", {}).get("value", "{}")
+        except Exception as e:
+            logger.exception("Error stopping recording", exc_info=e)
+            return '{"error": "' + str(e) + '"}'
 
     async def _get_storage(self) -> str:
         """Get browser storage (cookies, local storage, session storage)."""

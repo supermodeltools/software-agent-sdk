@@ -230,6 +230,8 @@ class BrowserToolExecutor(ToolExecutor[BrowserAction, BrowserObservation]):
             BrowserObservation,
             BrowserScrollAction,
             BrowserSetStorageAction,
+            BrowserStartRecordingAction,
+            BrowserStopRecordingAction,
             BrowserSwitchTabAction,
             BrowserTypeAction,
         )
@@ -263,6 +265,10 @@ class BrowserToolExecutor(ToolExecutor[BrowserAction, BrowserObservation]):
                 result = await self.switch_tab(action.tab_id)
             elif isinstance(action, BrowserCloseTabAction):
                 result = await self.close_tab(action.tab_id)
+            elif isinstance(action, BrowserStartRecordingAction):
+                result = await self.start_recording()
+            elif isinstance(action, BrowserStopRecordingAction):
+                result = await self.stop_recording()
             else:
                 error_msg = f"Unsupported action type: {type(action)}"
                 return BrowserObservation.from_text(
@@ -384,6 +390,17 @@ class BrowserToolExecutor(ToolExecutor[BrowserAction, BrowserObservation]):
         return await self._server._get_content(
             extract_links=extract_links, start_from_char=start_from_char
         )
+
+    # Session Recording
+    async def start_recording(self) -> str:
+        """Start recording the browser session using rrweb."""
+        await self._ensure_initialized()
+        return await self._server._start_recording()
+
+    async def stop_recording(self) -> str:
+        """Stop recording and return the recorded events as JSON."""
+        await self._ensure_initialized()
+        return await self._server._stop_recording()
 
     async def close_browser(self) -> str:
         """Close the browser session."""
