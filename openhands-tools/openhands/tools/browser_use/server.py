@@ -15,29 +15,117 @@ RRWEB_LOADER_SCRIPT = """
     if (window.__rrweb_loaded) return;
     window.__rrweb_loaded = true;
 
-    // Create a simple fallback in case CDN fails
+    // Initialize storage for events
     window.__rrweb_events = window.__rrweb_events || [];
+    window.__rrweb_using_stub = false;
 
     function loadRrweb() {
         var s = document.createElement('script');
         s.src = '""" + RRWEB_CDN_URL + """';
         s.onload = function() {
             window.__rrweb_ready = true;
+            window.__rrweb_using_stub = false;
             console.log('[rrweb] Loaded successfully from CDN');
         };
         s.onerror = function() {
             console.error('[rrweb] Failed to load from CDN, creating minimal stub');
-            // Create a minimal stub that just captures basic events
+            window.__rrweb_using_stub = true;
+            // Create a minimal stub that captures basic events and DOM mutations
             window.rrweb = {
                 record: function(opts) {
                     console.log('[rrweb-stub] Recording started');
                     var emitFn = opts.emit;
-                    // Emit a meta event
-                    emitFn({type: 4, data: {href: location.href, width: window.innerWidth, height: window.innerHeight}, timestamp: Date.now()});
-                    // Emit a full snapshot stub
-                    emitFn({type: 2, data: {node: {type: 0, childNodes: []}}, timestamp: Date.now()});
+
+                    // Emit a meta event (type 4)
+                    emitFn({
+                        type: 4,
+                        data: {
+                            href: location.href,
+                            width: window.innerWidth,
+                            height: window.innerHeight
+                        },
+                        timestamp: Date.now()
+                    });
+
+                    // Emit a full snapshot (type 2) - capture current DOM
+                    function serializeNode(node, id) {
+                        var obj = {id: id, type: node.nodeType};
+                        if (node.nodeType === 1) { // Element
+                            obj.tagName = node.tagName.toLowerCase();
+                            obj.attributes = {};
+                            for (var i = 0; i < node.attributes.length; i++) {
+                                obj.attributes[node.attributes[i].name] = node.attributes[i].value;
+                            }
+                            obj.childNodes = [];
+                            var childId = id * 100;
+                            for (var j = 0; j < node.childNodes.length && j < 50; j++) {
+                                obj.childNodes.push(serializeNode(node.childNodes[j], childId + j));
+                            }
+                        } else if (node.nodeType === 3) { // Text
+                            obj.textContent = node.textContent ? node.textContent.slice(0, 1000) : '';
+                        }
+                        return obj;
+                    }
+
+                    emitFn({
+                        type: 2,
+                        data: {
+                            node: serializeNode(document.documentElement, 1),
+                            initialOffset: {top: window.scrollY, left: window.scrollX}
+                        },
+                        timestamp: Date.now()
+                    });
+
+                    // Set up mutation observer for incremental snapshots (type 3)
+                    var observer = new MutationObserver(function(mutations) {
+                        mutations.forEach(function(mutation) {
+                            emitFn({
+                                type: 3,
+                                data: {
+                                    source: 0, // Mutation
+                                    texts: [],
+                                    attributes: [],
+                                    removes: [],
+                                    adds: [{parentId: 1, node: {type: 3, textContent: 'mutation'}}]
+                                },
+                                timestamp: Date.now()
+                            });
+                        });
+                    });
+                    observer.observe(document.body || document.documentElement, {
+                        childList: true,
+                        subtree: true,
+                        attributes: true,
+                        characterData: true
+                    });
+
+                    // Capture scroll events (type 3, source 3)
+                    var scrollHandler = function() {
+                        emitFn({
+                            type: 3,
+                            data: {source: 3, x: window.scrollX, y: window.scrollY},
+                            timestamp: Date.now()
+                        });
+                    };
+                    window.addEventListener('scroll', scrollHandler);
+
+                    // Capture mouse move events (type 3, source 1)
+                    var mouseHandler = function(e) {
+                        emitFn({
+                            type: 3,
+                            data: {source: 1, positions: [{x: e.clientX, y: e.clientY, timeOffset: 0}]},
+                            timestamp: Date.now()
+                        });
+                    };
+                    document.addEventListener('mousemove', mouseHandler, {passive: true});
+
                     // Return a stop function
-                    return function() { console.log('[rrweb-stub] Recording stopped'); };
+                    return function() {
+                        console.log('[rrweb-stub] Recording stopped');
+                        observer.disconnect();
+                        window.removeEventListener('scroll', scrollHandler);
+                        document.removeEventListener('mousemove', mouseHandler);
+                    };
                 }
             };
             window.__rrweb_ready = true;
@@ -52,6 +140,10 @@ RRWEB_LOADER_SCRIPT = """
     }
 })();
 """
+
+# Maximum retries for starting recording
+RRWEB_START_MAX_RETRIES = 10
+RRWEB_START_RETRY_DELAY_MS = 500
 
 
 class CustomBrowserUseServer(LogSafeBrowserUseServer):
@@ -107,41 +199,92 @@ class CustomBrowserUseServer(LogSafeBrowserUseServer):
             logger.warning(f"Failed to inject scripts: {e}")
 
     async def _start_recording(self) -> str:
-        """Start rrweb session recording."""
+        """Start rrweb session recording with automatic retry.
+
+        Will retry up to RRWEB_START_MAX_RETRIES times if rrweb is not loaded yet.
+        This handles the case where recording is started before the page fully loads.
+        """
+        import asyncio
+
         if not self.browser_session:
             return "Error: No browser session active"
 
         try:
             cdp_session = await self.browser_session.get_or_create_cdp_session()
-            result = await cdp_session.cdp_client.send.Runtime.evaluate(
-                params={
-                    "expression": """
-                        (function() {
-                            if (window.__rrweb_stopFn) return 'Already recording';
-                            // rrweb UMD module exports to window.rrweb (not rrwebRecord)
-                            var recordFn = (typeof rrweb !== 'undefined' && rrweb.record) ||
-                                           (typeof rrwebRecord !== 'undefined' && rrwebRecord.record);
-                            if (!recordFn) return 'rrweb not loaded yet - try again after page loads';
-                            window.__rrweb_events = [];
-                            window.__rrweb_stopFn = recordFn({
-                                emit: function(event) {
-                                    window.__rrweb_events.push(event);
-                                }
-                            });
-                            return 'Recording started';
-                        })();
-                    """,
-                    "returnByValue": True,
-                },
-                session_id=cdp_session.session_id,
+
+            start_recording_js = """
+                (function() {
+                    if (window.__rrweb_stopFn) return {status: 'already_recording'};
+                    // rrweb UMD module exports to window.rrweb (not rrwebRecord)
+                    var recordFn = (typeof rrweb !== 'undefined' && rrweb.record) ||
+                                   (typeof rrwebRecord !== 'undefined' && rrwebRecord.record);
+                    if (!recordFn) return {status: 'not_loaded'};
+                    window.__rrweb_events = [];
+                    window.__rrweb_stopFn = recordFn({
+                        emit: function(event) {
+                            window.__rrweb_events.push(event);
+                        }
+                    });
+                    return {
+                        status: 'started',
+                        using_stub: !!window.__rrweb_using_stub,
+                        event_count: window.__rrweb_events.length
+                    };
+                })();
+            """
+
+            # Retry loop for starting recording
+            for attempt in range(RRWEB_START_MAX_RETRIES):
+                result = await cdp_session.cdp_client.send.Runtime.evaluate(
+                    params={"expression": start_recording_js, "returnByValue": True},
+                    session_id=cdp_session.session_id,
+                )
+
+                value = result.get("result", {}).get("value", {})
+                status = value.get("status") if isinstance(value, dict) else value
+
+                if status == "started":
+                    using_stub = value.get("using_stub", False) if isinstance(value, dict) else False
+                    if using_stub:
+                        logger.warning("Recording started using fallback stub (CDN load failed)")
+                        return "Recording started (using fallback recorder - CDN unavailable)"
+                    logger.info("Recording started successfully with rrweb")
+                    return "Recording started"
+
+                elif status == "already_recording":
+                    return "Already recording"
+
+                elif status == "not_loaded":
+                    if attempt < RRWEB_START_MAX_RETRIES - 1:
+                        logger.debug(
+                            f"rrweb not loaded yet, retrying... "
+                            f"(attempt {attempt + 1}/{RRWEB_START_MAX_RETRIES})"
+                        )
+                        await asyncio.sleep(RRWEB_START_RETRY_DELAY_MS / 1000)
+                    continue
+
+                else:
+                    return f"Unknown status: {status}"
+
+            # All retries exhausted
+            return (
+                "rrweb not loaded after retries. "
+                "Please navigate to a page first and try again."
             )
-            return result.get("result", {}).get("value", "Unknown error")
+
         except Exception as e:
             logger.exception("Error starting recording", exc_info=e)
             return f"Error starting recording: {str(e)}"
 
     async def _stop_recording(self) -> str:
-        """Stop rrweb recording and return events as JSON."""
+        """Stop rrweb recording and return events as JSON.
+
+        Returns a JSON object with:
+        - events: Array of rrweb events
+        - count: Number of events captured
+        - using_stub: Whether the fallback stub was used (CDN unavailable)
+        - event_types: Summary of event types captured
+        """
         if not self.browser_session:
             return '{"error": "No browser session active"}'
 
@@ -151,22 +294,75 @@ class CustomBrowserUseServer(LogSafeBrowserUseServer):
                 params={
                     "expression": """
                         (function() {
-                            if (!window.__rrweb_stopFn) return JSON.stringify({error: 'Not recording'});
+                            if (!window.__rrweb_stopFn) {
+                                return JSON.stringify({
+                                    error: 'Not recording',
+                                    hint: 'Call browser_start_recording first'
+                                });
+                            }
+
+                            // Stop the recording
                             window.__rrweb_stopFn();
+
                             var events = window.__rrweb_events || [];
+                            var using_stub = !!window.__rrweb_using_stub;
+
+                            // Count event types for summary
+                            var eventTypes = {};
+                            var typeNames = {
+                                0: 'DomContentLoaded',
+                                1: 'Load',
+                                2: 'FullSnapshot',
+                                3: 'IncrementalSnapshot',
+                                4: 'Meta',
+                                5: 'Custom',
+                                6: 'Plugin'
+                            };
+                            events.forEach(function(e) {
+                                var typeName = typeNames[e.type] || ('Unknown_' + e.type);
+                                eventTypes[typeName] = (eventTypes[typeName] || 0) + 1;
+                            });
+
+                            // Cleanup
                             window.__rrweb_stopFn = null;
                             window.__rrweb_events = [];
-                            return JSON.stringify({events: events, count: events.length});
+
+                            return JSON.stringify({
+                                events: events,
+                                count: events.length,
+                                using_stub: using_stub,
+                                event_types: eventTypes
+                            });
                         })();
                     """,
                     "returnByValue": True,
                 },
                 session_id=cdp_session.session_id,
             )
-            return result.get("result", {}).get("value", "{}")
+
+            result_str = result.get("result", {}).get("value", "{}")
+
+            # Log summary
+            try:
+                import json
+                data = json.loads(result_str)
+                count = data.get("count", 0)
+                using_stub = data.get("using_stub", False)
+                event_types = data.get("event_types", {})
+
+                if using_stub:
+                    logger.warning(f"Recording stopped (fallback stub): {count} events captured")
+                else:
+                    logger.info(f"Recording stopped: {count} events captured")
+                logger.debug(f"Event types: {event_types}")
+            except Exception:
+                pass  # Don't fail on logging
+
+            return result_str
+
         except Exception as e:
             logger.exception("Error stopping recording", exc_info=e)
-            return '{"error": "' + str(e) + '"}'
+            return '{"error": "' + str(e).replace('"', '\\"') + '"}'
 
     async def _get_storage(self) -> str:
         """Get browser storage (cookies, local storage, session storage)."""

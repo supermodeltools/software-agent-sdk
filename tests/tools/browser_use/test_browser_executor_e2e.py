@@ -668,13 +668,8 @@ class TestBrowserExecutorE2E:
         navigate_action = BrowserNavigateAction(url=test_server)
         browser_executor(navigate_action)
 
-        # Wait for rrweb to load from CDN with retry
-        result = None
-        for attempt in range(10):
-            time.sleep(1)
-            result = browser_executor(BrowserStartRecordingAction())
-            if "Recording started" in result.text:
-                break
+        # Start recording - now includes automatic retry
+        result = browser_executor(BrowserStartRecordingAction())
 
         assert isinstance(result, BrowserObservation)
         assert not result.is_error
@@ -708,13 +703,8 @@ class TestBrowserExecutorE2E:
         navigate_action = BrowserNavigateAction(url=test_server)
         browser_executor(navigate_action)
 
-        # Wait for rrweb to load from CDN with retry
-        start_result = None
-        for attempt in range(10):
-            time.sleep(1)
-            start_result = browser_executor(BrowserStartRecordingAction())
-            if "Recording started" in start_result.text:
-                break
+        # Start recording - now includes automatic retry
+        start_result = browser_executor(BrowserStartRecordingAction())
 
         assert start_result is not None
         assert not start_result.is_error
@@ -741,10 +731,18 @@ class TestBrowserExecutorE2E:
         assert data["count"] > 0, "Expected at least some events to be recorded"
         assert len(data["events"]) == data["count"]
 
+        # New: verify event_types summary is present
+        assert "event_types" in data, "Should include event_types summary"
+
         # rrweb events should have required fields
         # Event type 4 is meta, type 2 is full snapshot, etc.
         event_types = [e.get("type") for e in data["events"]]
         assert len(event_types) > 0, "Events should have type field"
+
+        # Print event summary for debugging
+        print(f"\n✓ Captured {data['count']} events")
+        print(f"✓ Event types: {data['event_types']}")
+        print(f"✓ Using stub: {data.get('using_stub', False)}")
 
     def test_recording_save_to_file(self, test_server: str):
         """Test that recording can be saved to a file."""
@@ -761,14 +759,8 @@ class TestBrowserExecutorE2E:
                 navigate_action = BrowserNavigateAction(url=test_server)
                 executor(navigate_action)
 
-                # Wait for rrweb to load from CDN with retry
-                start_result = None
-                for attempt in range(10):
-                    time.sleep(1)
-                    start_result = executor(BrowserStartRecordingAction())
-                    if "Recording started" in start_result.text:
-                        break
-                    print(f"Attempt {attempt + 1}: {start_result.text}")
+                # Start recording - now includes automatic retry
+                start_result = executor(BrowserStartRecordingAction())
 
                 assert start_result is not None
                 assert "Recording started" in start_result.text, (
@@ -787,6 +779,9 @@ class TestBrowserExecutorE2E:
                 data = json.loads(stop_result.text)
                 assert data["count"] > 0
 
+                # Verify event_types summary is present
+                assert "event_types" in data, "Should include event_types summary"
+
                 # Save recording to file
                 recording_path = os.path.join(temp_save_dir, "recording.json")
                 with open(recording_path, "w") as f:
@@ -804,6 +799,8 @@ class TestBrowserExecutorE2E:
 
                 print(f"\n✓ Recording saved to {recording_path}")
                 print(f"✓ Captured {data['count']} events")
+                print(f"✓ Event types: {data['event_types']}")
+                print(f"✓ Using stub: {data.get('using_stub', False)}")
                 print(f"✓ File size: {os.path.getsize(recording_path)} bytes")
 
             finally:
