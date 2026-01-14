@@ -5,9 +5,9 @@ import logging
 import re
 from enum import Enum
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from openhands.sdk.hooks.types import HookEventType
 
@@ -77,9 +77,90 @@ class HookMatcher(BaseModel):
 
 
 class HookConfig(BaseModel):
-    """Configuration for all hooks, loaded from .openhands/hooks.json."""
+    """Configuration for all hooks.
 
-    hooks: dict[str, list[HookMatcher]] = Field(default_factory=dict)
+    Hooks can be configured either by loading from .openhands/hooks.json or
+    by directly instantiating with typed fields:
+
+        # Direct instantiation with typed fields (recommended):
+        config = HookConfig(
+            pre_tool_use=[
+                HookMatcher(
+                    matcher="terminal",
+                    hooks=[HookDefinition(command="block_dangerous.sh")]
+                )
+            ]
+        )
+
+        # Load from JSON file:
+        config = HookConfig.load(".openhands/hooks.json")
+    """
+
+    pre_tool_use: list[HookMatcher] = Field(
+        default_factory=list,
+        description="Hooks that run before tool execution",
+    )
+    post_tool_use: list[HookMatcher] = Field(
+        default_factory=list,
+        description="Hooks that run after tool execution",
+    )
+    user_prompt_submit: list[HookMatcher] = Field(
+        default_factory=list,
+        description="Hooks that run when user submits a prompt",
+    )
+    session_start: list[HookMatcher] = Field(
+        default_factory=list,
+        description="Hooks that run when a session starts",
+    )
+    session_end: list[HookMatcher] = Field(
+        default_factory=list,
+        description="Hooks that run when a session ends",
+    )
+    stop: list[HookMatcher] = Field(
+        default_factory=list,
+        description="Hooks that run when the agent attempts to stop",
+    )
+
+    # Mapping from HookEventType PascalCase values to snake_case field names
+    EVENT_FIELD_MAP: ClassVar[dict[str, str]] = {
+        "PreToolUse": "pre_tool_use",
+        "PostToolUse": "post_tool_use",
+        "UserPromptSubmit": "user_prompt_submit",
+        "SessionStart": "session_start",
+        "SessionEnd": "session_end",
+        "Stop": "stop",
+    }
+
+    @property
+    def hooks(self) -> dict[str, list[HookMatcher]]:
+        """Return hooks as a dict for backward compatibility."""
+        result: dict[str, list[HookMatcher]] = {}
+        for event_key, field_name in self.EVENT_FIELD_MAP.items():
+            matchers = getattr(self, field_name)
+            if matchers:
+                result[event_key] = matchers
+        return result
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_hooks_input(cls, data: Any) -> Any:
+        """Support JSON format with PascalCase keys and 'hooks' wrapper."""
+        if not isinstance(data, dict):
+            return data
+
+        # Unwrap legacy format: {"hooks": {"PreToolUse": [...]}}
+        if "hooks" in data and len(data) == 1:
+            data = data["hooks"]
+
+        # Convert PascalCase keys to snake_case field names
+        normalized: dict[str, Any] = {}
+        for key, value in data.items():
+            if key in cls.EVENT_FIELD_MAP:
+                normalized[cls.EVENT_FIELD_MAP[key]] = value
+            else:
+                # Keep snake_case keys as-is
+                normalized[key] = value
+        return normalized
 
     @classmethod
     def load(
@@ -114,7 +195,8 @@ class HookConfig(BaseModel):
         try:
             with open(path) as f:
                 data = json.load(f)
-            return cls.from_dict(data)
+            # Use model_validate which triggers the model_validator
+            return cls.model_validate(data)
         except (json.JSONDecodeError, OSError) as e:
             # Log warning but don't fail - just return empty config
             logger.warning(f"Failed to load hooks from {path}: {e}")
@@ -122,38 +204,29 @@ class HookConfig(BaseModel):
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "HookConfig":
-        """Create HookConfig from a dictionary."""
-        hooks_data = data.get("hooks", {})
-        hooks: dict[str, list[HookMatcher]] = {}
+        """Create HookConfig from a dictionary.
 
-        for event_type, matchers in hooks_data.items():
-            if not isinstance(matchers, list):
-                continue
+        Supports both legacy format with "hooks" wrapper and direct format:
+            # Legacy format:
+            {"hooks": {"PreToolUse": [...]}}
 
-            hooks[event_type] = []
-            for matcher_data in matchers:
-                if isinstance(matcher_data, dict):
-                    # Parse hooks within the matcher
-                    hook_defs = []
-                    for hook_data in matcher_data.get("hooks", []):
-                        if isinstance(hook_data, dict):
-                            hook_defs.append(HookDefinition(**hook_data))
+            # Direct format:
+            {"PreToolUse": [...]}
+        """
+        return cls.model_validate(data)
 
-                    hooks[event_type].append(
-                        HookMatcher(
-                            matcher=matcher_data.get("matcher", "*"),
-                            hooks=hook_defs,
-                        )
-                    )
-
-        return cls(hooks=hooks)
+    def _get_matchers_for_event(self, event_type: HookEventType) -> list[HookMatcher]:
+        """Get matchers for an event type using the field mapping."""
+        field_name = self.EVENT_FIELD_MAP.get(event_type.value)
+        if field_name is None:
+            return []
+        return getattr(self, field_name, [])
 
     def get_hooks_for_event(
         self, event_type: HookEventType, tool_name: str | None = None
     ) -> list[HookDefinition]:
         """Get all hooks that should run for an event."""
-        event_key = event_type.value
-        matchers = self.hooks.get(event_key, [])
+        matchers = self._get_matchers_for_event(event_type)
 
         result: list[HookDefinition] = []
         for matcher in matchers:
@@ -164,11 +237,16 @@ class HookConfig(BaseModel):
 
     def has_hooks_for_event(self, event_type: HookEventType) -> bool:
         """Check if there are any hooks configured for an event type."""
-        return event_type.value in self.hooks and len(self.hooks[event_type.value]) > 0
+        matchers = self._get_matchers_for_event(event_type)
+        return len(matchers) > 0
 
     def to_dict(self) -> dict[str, Any]:
-        """Convert to dictionary format for serialization."""
-        hooks_dict = {k: [m.model_dump() for m in v] for k, v in self.hooks.items()}
+        """Convert to dictionary format for serialization (JSON-compatible)."""
+        hooks_dict: dict[str, list[dict[str, Any]]] = {}
+        for event_key, field_name in self.EVENT_FIELD_MAP.items():
+            matchers = getattr(self, field_name)
+            if matchers:
+                hooks_dict[event_key] = [m.model_dump(mode="json") for m in matchers]
         return {"hooks": hooks_dict}
 
     def save(self, path: str | Path) -> None:

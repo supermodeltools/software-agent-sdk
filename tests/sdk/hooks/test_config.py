@@ -3,7 +3,7 @@
 import json
 import tempfile
 
-from openhands.sdk.hooks.config import HookConfig, HookMatcher
+from openhands.sdk.hooks.config import HookConfig, HookDefinition, HookMatcher
 from openhands.sdk.hooks.types import HookEventType
 
 
@@ -143,3 +143,58 @@ class TestHookConfig:
         )
         assert len(file_hooks) == 1
         assert file_hooks[0].command == "file-hook.sh"
+
+    def test_typed_field_instantiation(self):
+        """Test creating HookConfig with typed fields (recommended approach)."""
+        config = HookConfig(
+            pre_tool_use=[
+                HookMatcher(
+                    matcher="terminal",
+                    hooks=[HookDefinition(command="block.sh", timeout=10)],
+                )
+            ],
+            post_tool_use=[HookMatcher(hooks=[HookDefinition(command="log.sh")])],
+        )
+
+        assert config.has_hooks_for_event(HookEventType.PRE_TOOL_USE)
+        assert config.has_hooks_for_event(HookEventType.POST_TOOL_USE)
+        assert not config.has_hooks_for_event(HookEventType.STOP)
+
+        hooks = config.get_hooks_for_event(HookEventType.PRE_TOOL_USE, "terminal")
+        assert len(hooks) == 1
+        assert hooks[0].command == "block.sh"
+        assert hooks[0].timeout == 10
+
+    def test_backward_compatible_json_round_trip(self):
+        """Test that to_dict produces JSON-compatible output matching old format."""
+        config = HookConfig(
+            pre_tool_use=[
+                HookMatcher(
+                    matcher="terminal",
+                    hooks=[HookDefinition(command="test.sh")],
+                )
+            ]
+        )
+
+        # to_dict should produce the old JSON format
+        output = config.to_dict()
+        assert "hooks" in output
+        assert "PreToolUse" in output["hooks"]
+        assert output["hooks"]["PreToolUse"][0]["matcher"] == "terminal"
+        assert output["hooks"]["PreToolUse"][0]["hooks"][0]["type"] == "command"
+
+        # Should be able to reload from the output
+        reloaded = HookConfig.from_dict(output)
+        assert reloaded.pre_tool_use == config.pre_tool_use
+
+    def test_hooks_property_backward_compatibility(self):
+        """Test the hooks property returns dict for backward compatibility."""
+        config = HookConfig(
+            pre_tool_use=[HookMatcher(hooks=[HookDefinition(command="a.sh")])],
+            stop=[HookMatcher(hooks=[HookDefinition(command="b.sh")])],
+        )
+
+        hooks = config.hooks
+        assert "PreToolUse" in hooks
+        assert "Stop" in hooks
+        assert "PostToolUse" not in hooks  # Empty lists not included
