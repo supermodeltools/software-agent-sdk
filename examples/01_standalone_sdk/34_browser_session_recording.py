@@ -143,8 +143,11 @@ else:
     print(f"\n✗ Recording file not found at: {recording_file}")
     print("  The agent may not have completed the recording task.")
 
-print("\n" + "=" * 80)
-print("LLM Messages Summary:")
-print("=" * 80)
-for i, message in enumerate(llm_messages):
-    print(f"Message {i}: {str(message)[:150]}...")
+print("\n" + "=" * 100)
+print("Conversation finished.")
+print(f"Total LLM messages: {len(llm_messages)}")
+print("=" * 100)
+
+# Report cost
+cost = conversation.conversation_stats.get_combined_metrics().accumulated_cost
+print(f"EXAMPLE_COST: {cost}")
