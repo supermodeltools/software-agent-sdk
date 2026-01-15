@@ -57,8 +57,6 @@ llm = LLM(
 # Tools - including browser tools with recording capability
 cwd = os.getcwd()
 tools = [
-    Tool(name=TerminalTool.name),
-    Tool(name=FileEditorTool.name),
     Tool(name=BrowserToolSet.name),
 ]
 
