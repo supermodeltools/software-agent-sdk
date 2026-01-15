@@ -141,44 +141,35 @@ def get_cache_path(source: str, cache_dir: Path | None = None) -> Path:
 def _extract_readable_name(source: str) -> str:
     """Extract a human-readable name from a source URL/path.
 
+    Extracts the last path component (repo name) and sanitizes it.
+    The hash in get_cache_path() ensures uniqueness, so this just needs
+    to be human-readable for debugging/browsing cache directories.
+
     Args:
-        source: Plugin source string.
+        source: Plugin source string (URL or path).
 
     Returns:
-        A sanitized, readable name for the cache directory.
+        A sanitized name suitable for use in directory names (max 32 chars).
     """
-    # Remove common prefixes and suffixes
+    # Strip common prefixes to get to the path portion
     name = source
+    for prefix in ("github:", "https://", "http://", "git://", "file://"):
+        if name.startswith(prefix):
+            name = name[len(prefix):]
+            break
 
-    # Handle github: prefix
-    if name.startswith("github:"):
-        name = name[7:]
+    # Handle SSH format: user@host:path -> path
+    if "@" in name and ":" in name and "/" not in name.split(":")[0]:
+        name = name.split(":", 1)[1]
 
-    # Handle URLs
-    if "://" in name:
-        # Remove protocol
-        name = name.split("://", 1)[1]
+    # Remove .git suffix and get last path component
+    name = name.rstrip("/").removesuffix(".git")
+    name = name.rsplit("/", 1)[-1]
 
-    # Handle SSH format (git@github.com:owner/repo.git)
-    if name.startswith("git@"):
-        name = name.split(":", 1)[1] if ":" in name else name
-
-    # Remove .git suffix
-    if name.endswith(".git"):
-        name = name[:-4]
-
-    # Get the last component (repo name)
-    if "/" in name:
-        parts = name.rstrip("/").split("/")
-        # For owner/repo format, use repo name
-        name = parts[-1] if parts else name
-
-    # Sanitize: only allow alphanumeric, dash, underscore
+    # Sanitize: keep alphanumeric, dash, underscore only
     name = re.sub(r"[^a-zA-Z0-9_-]", "-", name)
-    name = re.sub(r"-+", "-", name)  # Collapse multiple dashes
-    name = name.strip("-")
+    name = re.sub(r"-+", "-", name).strip("-")
 
-    # Limit length
     return name[:32] if name else "plugin"
 
 
