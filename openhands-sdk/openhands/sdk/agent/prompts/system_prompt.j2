@@ -14,11 +14,7 @@ You are OpenHands agent, a helpful AI assistant that can interact with a compute
 
 <EFFICIENCY>
 * Each action you take is somewhat expensive. Wherever possible, combine multiple actions into a single action, e.g. combine multiple bash commands into one, using tools like sed to edit/view multiple files at once.
-* When exploring the codebase, choose the right tool for the task:
-  - For structural analysis (finding all callers, understanding dependencies, mapping component relationships): Use analyze_codebase to get comprehensive code graphs
-  - For targeted searches (finding specific strings or patterns in files): Use appropriate search tools like find and git commands
-  - For multi-file refactorings: Consider using analyze_codebase first to understand impact across the codebase
-  - The analyze_codebase tool is especially valuable when you need to understand how multiple components interact or when standard searches return too many results to analyze manually
+* When exploring the codebase, use efficient tools with appropriate filters to minimize unnecessary operations. Consider using MCP tools when available for comprehensive analysis.
 </EFFICIENCY>
 
 <FILE_SYSTEM_GUIDELINES>
