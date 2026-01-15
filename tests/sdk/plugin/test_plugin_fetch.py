@@ -419,19 +419,19 @@ class TestFetchPlugin:
         mock_git.checkout.assert_called_once_with(cache_path, "v1.0.0")
 
     def test_fetch_git_error_raises_plugin_fetch_error(self, tmp_path: Path):
-        """Test that git errors are wrapped in PluginFetchError."""
+        """Test that git errors result in PluginFetchError."""
         mock_git = create_autospec(GitHelper)
         mock_git.clone.side_effect = GitCommandError(
             "fatal: repository not found", command=["git", "clone"], exit_code=128
         )
 
-        with pytest.raises(PluginFetchError, match="Git operation failed"):
+        with pytest.raises(PluginFetchError, match="Failed to fetch plugin"):
             fetch_plugin(
                 "github:owner/nonexistent", cache_dir=tmp_path, git_helper=mock_git
             )
 
-    def test_fetch_generic_error_wrapped(self, tmp_path: Path):
-        """Test that generic errors are wrapped in PluginFetchError."""
+    def test_fetch_generic_error_raises_plugin_fetch_error(self, tmp_path: Path):
+        """Test that generic errors result in PluginFetchError."""
         mock_git = create_autospec(GitHelper)
         mock_git.clone.side_effect = RuntimeError("Unexpected error")
 
@@ -629,22 +629,6 @@ class TestFetchPluginEdgeCases:
 
         assert result.exists()
         assert str(tmp_path / "cache") in str(result)
-
-    def test_fetch_reraises_plugin_fetch_error(self, tmp_path: Path):
-        """Test that PluginFetchError is re-raised directly (line 248)."""
-        mock_git = create_autospec(GitHelper)
-
-        # Make clone raise PluginFetchError to test the re-raise path
-        mock_git.clone.side_effect = PluginFetchError("Test error from clone")
-
-        # This should re-raise the PluginFetchError directly
-        with pytest.raises(PluginFetchError, match="Test error from clone"):
-            fetch_plugin(
-                "github:owner/repo",
-                cache_dir=tmp_path,
-                git_helper=mock_git,
-            )
-
 
 class TestGitHelperErrors:
     """Tests for GitHelper error handling paths.

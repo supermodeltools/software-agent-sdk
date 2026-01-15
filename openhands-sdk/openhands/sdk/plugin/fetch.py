@@ -6,13 +6,7 @@ import hashlib
 import re
 from pathlib import Path
 
-from openhands.sdk.git.cached_repo import (
-    GitHelper,
-    _checkout_ref,
-    _clone_repository,
-    _update_repository,
-)
-from openhands.sdk.git.exceptions import GitCommandError
+from openhands.sdk.git.cached_repo import GitHelper, cached_clone_or_update
 from openhands.sdk.logger import get_logger
 
 
@@ -217,9 +211,6 @@ def fetch_plugin(
             return final_path
         return local_path
 
-    # Get git helper
-    git = git_helper if git_helper is not None else GitHelper()
-
     # Get cache path
     if cache_dir is None:
         cache_dir = DEFAULT_CACHE_DIR
@@ -229,31 +220,25 @@ def fetch_plugin(
     # Ensure cache directory exists
     cache_dir.mkdir(parents=True, exist_ok=True)
 
-    try:
-        if plugin_path.exists() and (plugin_path / ".git").exists():
-            if update:
-                _update_repository(plugin_path, ref, git)
-            else:
-                logger.debug(f"Using cached plugin at {plugin_path}")
-                if ref:
-                    _checkout_ref(plugin_path, ref, git)
-        else:
-            _clone_repository(url, plugin_path, ref, git)
+    # Use the shared cached_clone_or_update function
+    result = cached_clone_or_update(
+        url=url,
+        repo_path=plugin_path,
+        ref=ref,
+        update=update,
+        git_helper=git_helper,
+    )
 
-        # Apply subpath if specified
-        if subpath:
-            final_path = plugin_path / subpath.strip("/")
-            if not final_path.exists():
-                raise PluginFetchError(
-                    f"Subdirectory '{subpath}' not found in plugin repository"
-                )
-            return final_path
+    if result is None:
+        raise PluginFetchError(f"Failed to fetch plugin from {source}")
 
-        return plugin_path
+    # Apply subpath if specified
+    if subpath:
+        final_path = plugin_path / subpath.strip("/")
+        if not final_path.exists():
+            raise PluginFetchError(
+                f"Subdirectory '{subpath}' not found in plugin repository"
+            )
+        return final_path
 
-    except GitCommandError as e:
-        raise PluginFetchError(f"Git operation failed: {e}") from e
-    except PluginFetchError:
-        raise
-    except Exception as e:
-        raise PluginFetchError(f"Failed to fetch plugin from {source}: {e}") from e
+    return plugin_path

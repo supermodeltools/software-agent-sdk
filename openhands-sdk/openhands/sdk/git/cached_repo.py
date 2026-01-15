@@ -131,7 +131,7 @@ class GitHelper:
 def cached_clone_or_update(
     url: str,
     repo_path: Path,
-    branch: str | None = None,
+    ref: str | None = None,
     update: bool = True,
     git_helper: GitHelper | None = None,
 ) -> Path | None:
@@ -140,13 +140,14 @@ def cached_clone_or_update(
     This is the main entry point for cached repository operations. It handles:
     - Cloning if the repo doesn't exist
     - Updating (fetch + reset) if it does exist and update=True
-    - Using existing cache if update=False
+    - Checking out a specific ref even when update=False
+    - Using existing cache as-is if update=False and no ref specified
 
     Args:
         url: Git URL to clone.
         repo_path: Path where the repository should be cached.
-        branch: Branch to checkout/update to. If None, uses default branch.
-        update: If True and repo exists, update it. If False, use as-is.
+        ref: Branch, tag, or commit to checkout. If None, uses default branch.
+        update: If True and repo exists, fetch and update it. If False, skip fetch.
         git_helper: GitHelper instance for git operations. If None, creates one.
 
     Returns:
@@ -158,12 +159,16 @@ def cached_clone_or_update(
         if repo_path.exists() and (repo_path / ".git").exists():
             if update:
                 logger.debug(f"Updating repository at {repo_path}")
-                _update_repository(repo_path, branch, git)
+                _update_repository(repo_path, ref, git)
+            elif ref:
+                # No update requested, but checkout specific ref
+                logger.debug(f"Checking out ref {ref} at {repo_path}")
+                _checkout_ref(repo_path, ref, git)
             else:
                 logger.debug(f"Using cached repository at {repo_path}")
         else:
             logger.info(f"Cloning repository from {url}")
-            _clone_repository(url, repo_path, branch, git)
+            _clone_repository(url, repo_path, ref, git)
 
         return repo_path
 
