@@ -137,11 +137,16 @@ def cached_clone_or_update(
 ) -> Path | None:
     """Clone or update a git repository in a cache directory.
 
-    This is the main entry point for cached repository operations. It handles:
-    - Cloning if the repo doesn't exist
-    - Updating (fetch + reset) if it does exist and update=True
-    - Checking out a specific ref even when update=False
-    - Using existing cache as-is if update=False and no ref specified
+    This is the main entry point for cached repository operations.
+
+    Behavior:
+        - If repo doesn't exist: clone (shallow, --depth 1) with optional ref
+        - If repo exists and update=True: fetch, checkout+reset to ref
+        - If repo exists and update=False with ref: checkout ref without fetching
+        - If repo exists and update=False without ref: use as-is
+
+    The update sequence is: fetch origin -> checkout ref -> reset --hard origin/ref.
+    This ensures local changes are discarded and the cache matches the remote.
 
     Args:
         url: Git URL to clone.
@@ -152,6 +157,7 @@ def cached_clone_or_update(
 
     Returns:
         Path to the local repository if successful, None on failure.
+        Returns None (not raises) on git errors to allow graceful degradation.
     """
     git = git_helper if git_helper is not None else GitHelper()
 

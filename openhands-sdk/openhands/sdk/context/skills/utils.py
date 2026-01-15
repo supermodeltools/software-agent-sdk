@@ -315,9 +315,12 @@ def update_skills_repository(
 ) -> Path | None:
     """Clone or update the local skills repository.
 
+    Uses the shared git caching infrastructure from openhands.sdk.git.cached_repo.
+    When updating, performs: fetch -> checkout ref -> reset --hard to origin/ref.
+
     Args:
         repo_url: URL of the skills repository.
-        branch: Branch name to use.
+        branch: Branch name to checkout and track.
         cache_dir: Directory where the repository should be cached.
 
     Returns:
