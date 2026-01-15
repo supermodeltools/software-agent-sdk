@@ -72,7 +72,10 @@ def conversation_callback(event: Event):
 
 
 conversation = Conversation(
-    agent=agent, callbacks=[conversation_callback], workspace=cwd
+    agent=agent, 
+    callbacks=[conversation_callback], 
+    workspace=cwd,
+    persistence_dir = "./.conversations"
 )
 
 # The prompt instructs the agent to:
@@ -93,13 +96,7 @@ Please complete the following task to demonstrate browser session recording:
    - Get the page content
    - Scroll down to see more content
 
-4. Finally, use `browser_stop_recording` to stop the recording and retrieve the 
-   captured events.
-
-5. Save the recording JSON to a file called 'browser_recording.json' in the 
-   current directory.
-
-Please report what was recorded (number of events, types of events, etc.).
+4. Finally, use `browser_stop_recording` to stop the recording. Events are automatically saved.
 """
 
 print("=" * 80)
@@ -148,4 +145,5 @@ print("=" * 100)
 
 # Report cost
 cost = conversation.conversation_stats.get_combined_metrics().accumulated_cost
+print(f'Conversation ID: {conversation.id}')
 print(f"EXAMPLE_COST: {cost}")
