@@ -7,7 +7,8 @@ They are designed to test the full end-to-end flow of plugin fetching.
 import subprocess
 from pathlib import Path
 
-from openhands.sdk.plugin import GitHelper, Plugin
+from openhands.sdk.git.cached_repo import GitHelper
+from openhands.sdk.plugin import Plugin
 from openhands.sdk.plugin.fetch import fetch_plugin
 
 
