@@ -11,7 +11,6 @@ from openhands.sdk.git.cached_repo import (
     _checkout_ref,
     _clone_repository,
     _update_repository,
-    get_git_helper,
 )
 from openhands.sdk.git.exceptions import GitCommandError
 from openhands.sdk.logger import get_logger
@@ -219,7 +218,7 @@ def fetch_plugin(
         return local_path
 
     # Get git helper
-    git = git_helper or get_git_helper()
+    git = git_helper if git_helper is not None else GitHelper()
 
     # Get cache path
     if cache_dir is None:

@@ -128,24 +128,6 @@ class GitHelper:
         return None if branch == "HEAD" else branch
 
 
-# Default GitHelper instance - can be replaced for testing
-_default_git_helper: GitHelper | None = None
-
-
-def get_git_helper() -> GitHelper:
-    """Get the default GitHelper instance."""
-    global _default_git_helper
-    if _default_git_helper is None:
-        _default_git_helper = GitHelper()
-    return _default_git_helper
-
-
-def set_git_helper(helper: GitHelper | None) -> None:
-    """Set the default GitHelper instance (for testing)."""
-    global _default_git_helper
-    _default_git_helper = helper
-
-
 def cached_clone_or_update(
     url: str,
     repo_path: Path,
@@ -165,12 +147,12 @@ def cached_clone_or_update(
         repo_path: Path where the repository should be cached.
         branch: Branch to checkout/update to. If None, uses default branch.
         update: If True and repo exists, update it. If False, use as-is.
-        git_helper: GitHelper instance (for testing). Defaults to global instance.
+        git_helper: GitHelper instance for git operations. If None, creates one.
 
     Returns:
         Path to the local repository if successful, None on failure.
     """
-    git = git_helper or get_git_helper()
+    git = git_helper if git_helper is not None else GitHelper()
 
     try:
         if repo_path.exists() and (repo_path / ".git").exists():

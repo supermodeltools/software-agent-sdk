@@ -11,8 +11,6 @@ from openhands.sdk.git.cached_repo import (
     _checkout_ref,
     _clone_repository,
     _update_repository,
-    get_git_helper,
-    set_git_helper,
 )
 from openhands.sdk.git.exceptions import GitCommandError
 from openhands.sdk.plugin import (
@@ -574,31 +572,6 @@ class TestSubpathParameter:
 
         assert result.exists()
         assert (result / ".git").exists()
-
-
-class TestSetGitHelper:
-    """Tests for set_git_helper and get_git_helper functions."""
-
-    def test_set_and_get_git_helper(self):
-        """Test setting and getting a custom GitHelper instance."""
-        # Save original
-        original = get_git_helper()
-
-        try:
-            # Set a custom helper
-            custom_helper = GitHelper()
-            set_git_helper(custom_helper)
-            assert get_git_helper() is custom_helper
-
-            # Reset to None to test lazy initialization
-            set_git_helper(None)
-            # Next get should create a new instance
-            new_helper = get_git_helper()
-            assert new_helper is not None
-            assert new_helper is not custom_helper
-        finally:
-            # Restore original
-            set_git_helper(original)
 
 
 class TestParsePluginSourceEdgeCases:
