@@ -113,6 +113,35 @@ class TestParsePluginSource:
         with pytest.raises(PluginFetchError, match="Unable to parse plugin source"):
             parse_plugin_source("invalid-source-format")
 
+    def test_self_hosted_git_url(self):
+        """Test parsing URLs from self-hosted/alternative git providers."""
+        # Codeberg
+        source_type, url = parse_plugin_source("https://codeberg.org/user/repo")
+        assert source_type == "git"
+        assert url == "https://codeberg.org/user/repo.git"
+
+        # Self-hosted GitLab
+        source_type, url = parse_plugin_source("https://git.mycompany.com/org/repo")
+        assert source_type == "git"
+        assert url == "https://git.mycompany.com/org/repo.git"
+
+        # SourceHut
+        source_type, url = parse_plugin_source("https://sr.ht/~user/repo")
+        assert source_type == "git"
+        assert url == "https://sr.ht/~user/repo.git"
+
+    def test_http_url(self):
+        """Test parsing plain HTTP URLs (some internal servers)."""
+        source_type, url = parse_plugin_source("http://internal-git.local/repo")
+        assert source_type == "git"
+        assert url == "http://internal-git.local/repo.git"
+
+    def test_ssh_with_custom_user(self):
+        """Test SSH URLs with non-git usernames."""
+        source_type, url = parse_plugin_source("deploy@git.example.com:project/repo.git")
+        assert source_type == "git"
+        assert url == "deploy@git.example.com:project/repo.git"
+
 
 class TestExtractReadableName:
     """Tests for _extract_readable_name function."""

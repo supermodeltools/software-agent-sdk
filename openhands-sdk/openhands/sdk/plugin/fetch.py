@@ -59,40 +59,57 @@ def parse_plugin_source(source: str) -> tuple[str, str]:
         url = f"https://github.com/{repo_path}.git"
         return ("github", url)
 
-    # Git URL patterns
-    git_url_patterns = [
-        r"^https?://.*\.git$",  # HTTPS with .git suffix
-        r"^https?://github\.com/",  # GitHub HTTPS (may not have .git)
-        r"^https?://gitlab\.com/",  # GitLab HTTPS
-        r"^https?://bitbucket\.org/",  # Bitbucket HTTPS
-        r"^git@.*:.*\.git$",  # SSH format
-        r"^git://",  # Git protocol
-        r"^file://",  # Local file:// URLs (for testing)
-    ]
+    # Git URLs: detect by protocol/scheme rather than enumerating providers
+    # This handles GitHub, GitLab, Bitbucket, Codeberg, self-hosted instances, etc.
+    if _is_git_url(source):
+        url = _normalize_git_url(source)
+        return ("git", url)
 
-    for pattern in git_url_patterns:
-        if re.match(pattern, source):
-            # Normalize: ensure .git suffix for HTTPS URLs
-            url = source
-            if url.startswith("https://") and not url.endswith(".git"):
-                # Remove trailing slash if present
-                url = url.rstrip("/")
-                url = f"{url}.git"
-            return ("git", url)
-
-    # Local path
-    if source.startswith("/") or source.startswith("~") or source.startswith("."):
+    # Local path: starts with /, ~, . or contains / without a URL scheme
+    if source.startswith(("/", "~", ".")):
         return ("local", source)
 
-    # If it looks like a path (contains path separators but no URL scheme)
-    if "/" in source and "://" not in source and not source.startswith("github:"):
-        # Could be a relative path
+    if "/" in source and "://" not in source:
+        # Relative path like "plugins/my-plugin"
         return ("local", source)
 
     raise PluginFetchError(
         f"Unable to parse plugin source: {source}. "
         f"Expected formats: 'github:owner/repo', git URL, or local path"
     )
+
+
+def _is_git_url(source: str) -> bool:
+    """Check if a source string looks like a git URL.
+
+    Detects git URLs by their protocol/scheme rather than enumerating providers.
+    This handles any git hosting service (GitHub, GitLab, Codeberg, self-hosted, etc.)
+    """
+    # HTTPS/HTTP URLs to git repositories
+    if source.startswith(("https://", "http://")):
+        return True
+
+    # SSH format: git@host:path or user@host:path
+    if re.match(r"^[\w.-]+@[\w.-]+:", source):
+        return True
+
+    # Git protocol
+    if source.startswith("git://"):
+        return True
+
+    # File protocol (for testing)
+    if source.startswith("file://"):
+        return True
+
+    return False
+
+
+def _normalize_git_url(url: str) -> str:
+    """Normalize a git URL by ensuring .git suffix for HTTPS URLs."""
+    if url.startswith(("https://", "http://")) and not url.endswith(".git"):
+        url = url.rstrip("/")
+        url = f"{url}.git"
+    return url
 
 
 def get_cache_path(source: str, cache_dir: Path | None = None) -> Path:
